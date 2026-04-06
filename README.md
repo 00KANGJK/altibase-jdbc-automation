@@ -1,79 +1,154 @@
-# 🚀 Altibase 7.3 JDBC Automation Test Suite
+# Altibase 7.3 JDBC Driver 자동화 테스트
 
-본 프로젝트는 **Altibase 7.3 DBMS**의 JDBC 드라이버 품질 검증을 위한 자동화 테스트 프레임워크입니다.  
-**ISO/IEC 25023** 및 **25051** 국제 표준의 품질 지표를 기반으로 설계되었습니다.
+Altibase DBMS의 JDBC 4.2 인터페이스 **264건**을 JUnit 5 기반으로 자동화한 테스트 프로젝트입니다.
 
----
+## 프로젝트 배경
 
-## 📌 Project Overview
-* **대상 DBMS:** Altibase 7.3 (Hybrid DB: Memory & Disk)
-* **테스트 범위:** JDBC API (Driver, Connection, Statement, ResultSet, Metadata 등 총 246건)
-* **주요 목표:** * JDBC 4.2 스펙 준수 여부 검증
-    * 하이브리드 아키텍처에 따른 데이터 정합성 확인
-    * 성능 효율성(Time-behaviour) 및 신뢰성 측정
+Altibase DBMS 품질 검증을 위해 작성된 수동 TC 934건 중 JDBC 영역 246건을 분석한 결과, **105건(42.7%)의 시나리오와 기대출력이 누락**된 상태였습니다. 메서드 시그니처만 나열되어 있어 "무엇을 검증해야 하는지"가 불명확했고, 수동 반복 실행으로 인한 비효율이 있었습니다.
 
----
+이 프로젝트에서는 누락된 TC를 보완하고, Altibase 고유 확장 기능 18건을 추가한 뒤, 전체 264건을 자동화 테스트로 전환했습니다. TC 설계는 ISO/IEC 25023, 25051의 품질 특성(기능 정확성, 오류 허용성, 기밀성)을 기준으로 했습니다.
 
-## 🛠 Tech Stack
-* **Language:** Java 17
-* **Test Framework:** JUnit 5 (Jupiter)
-* **Assertion:** AssertJ
-* **Build Tool:** Maven
-* **Reporting:** Allure Report
-* **DB Client:** DBeaver (Verification & Mock Data)
+## 기술 스택
 
----
+| 구분 | 기술 |
+|------|------|
+| Language | Java 17 |
+| Test Framework | JUnit 5 (Jupiter) |
+| Build | Maven + Surefire |
+| Assertion | AssertJ |
+| Report | Allure Report |
+| DB Driver | Altibase JDBC 4.2 (7.3) |
+| Config | SnakeYAML (application.yml) |
 
-## 📂 Project Structure
+## 주요 특징
+
+- **264건 TC** — 기존 246건의 누락 데이터 보완(105건) + Altibase 확장 기능 신규 TC(18건)
+- **7개 JDBC 인터페이스 커버리지** — Driver, Connection, DatabaseMetaData, Statement, PreparedStatement, ResultSet/ResultSetMetaData, CallableStatement
+- **3가지 검증 패턴** — 값 검증(assertEquals), 예외 검증(assertThrows), ResultSet 순회 검증
+- **Tag 기반 선택 실행** — 중분류별 카테고리 태깅으로 원하는 영역만 실행 가능
+- **환경 분리** — 환경변수 우선, application.yml 폴백 이중 설정 구조
+- **Allure 리포트** — TC_ID 기반 추적 가능한 테스트 결과 리포트 자동 생성
+
+## 프로젝트 구조
+
 ```text
 altibase-jdbc-test/
+├── pom.xml
+├── lib/
+│   └── Altibase.jar
 ├── src/test/java/com/altibase/qa/
-│   ├── base/           # 공통 인프라 (ConnectionFactory, BaseClass)
-│   ├── suites/         # TC 카테고리별 테스트 클래스
-│   └── utils/          # 성능 측정 및 로깅 유틸리티
+│   ├── base/
+│   │   ├── AltibaseTestBase.java          ← 공통 베이스 클래스
+│   │   ├── ConnectionFactory.java         ← 커넥션 생성/관리
+│   │   └── TestDataManager.java           ← 테스트 데이터 setup/teardown
+│   ├── driver/
+│   │   └── DriverTest.java                ← 6건
+│   ├── connection/
+│   │   └── ConnectionTest.java            ← 21건
+│   ├── metadata/
+│   │   └── DatabaseMetaDataTest.java      ← 91건
+│   ├── statement/
+│   │   ├── StatementTest.java             ← 22건
+│   │   └── PreparedStatementTest.java     ← 26건
+│   ├── resultset/
+│   │   ├── ResultSetTest.java             ← 47건
+│   │   └── ResultSetMetaDataTest.java     ← 20건
+│   ├── callable/
+│   │   └── CallableStatementTest.java     ← 13건
+│   └── extension/
+│       └── AltibaseExtensionTest.java     ← 18건 (확장 기능)
 └── src/test/resources/
-    ├── application.yml # DB 접속 정보 (Git 제외 대상)
-    └── sql/            # 테스트 스키마/프로시저 DDL
+    ├── application.yml                     ← 접속 정보
+    └── sql/
+        └── setup.sql                       ← 테스트 스키마 DDL
 ```
 
----
+## 사전 요구사항
 
-## ⚙️ Prerequisites
-1. **Java 17** 이상 설치
-2. **Altibase JDBC Driver** 설치
-   * `lib/Altibase.jar` 파일을 로컬 메이븐 레포지토리에 등록해야 합니다.
-   ```bash
-   mvn install:install-file -Dfile=lib/Altibase.jar -DgroupId=com.altibase -DartifactId=altibase-jdbc -Dversion=7.3 -Dpackaging=jar
-   ```
-3. **접속 정보 설정**
-   * `src/test/resources/application.yml` 파일을 생성하고 접속 정보를 입력하세요. (보안상의 이유로 깃허브에는 포함되지 않습니다.)
+- Java 17 이상
+- Maven 3.8 이상
+- Altibase 7.3 서버 기동 상태
+- Altibase JDBC Driver (Altibase.jar)
 
----
+## 접속 설정
 
-## 🏃 How to Run
-### 1. 전체 테스트 실행
+### 환경변수 (우선)
+
 ```bash
+export ALTIBASE_JDBC_URL=jdbc:Altibase://localhost:20300/mydb
+export ALTIBASE_JDBC_USER=sys
+export ALTIBASE_JDBC_PASSWORD=manager
+```
+
+### application.yml (폴백)
+
+```yaml
+altibase:
+  jdbc:
+    url: jdbc:Altibase://localhost:20300/mydb
+    username: sys
+    password: manager
+    driver-class-name: Altibase.jdbc.driver.AltibaseDriver
+```
+
+## JDBC Driver 등록
+
+```bash
+mvn install:install-file \
+    -Dfile=lib/Altibase.jar \
+    -DgroupId=com.altibase \
+    -DartifactId=altibase-jdbc \
+    -Dversion=7.3 \
+    -Dpackaging=jar
+```
+
+## 실행 방법
+
+```bash
+# 전체 테스트 실행
 mvn test
-```
 
-### 2. 특정 카테고리 테스트 실행 (JUnit Tags)
-```bash
-mvn test -Dgroups="connection"
-```
+# 특정 카테고리만 실행
+mvn test -Dtest.groups=connection
+mvn test -Dtest.groups=metadata
 
----
+# 특정 클래스만 실행
+mvn test -Dtest=DatabaseMetaDataTest
 
-## 📊 Reporting
-본 프로젝트는 Allure를 통해 시각화된 품질 리포트를 생성합니다.
-```bash
-# 테스트 완료 후 리포트 생성 및 확인
+# Allure 리포트 생성 및 브라우저 열기
 mvn allure:serve
 ```
-리포트에서는 **성능 응답 시간**, **테스트 성공률**, **에러 상세 로그**를 확인할 수 있으며 이는 **ISO/IEC 25023** 품질 측정 지표로 활용됩니다.
 
----
+## TC 설계 기준
 
-## 📝 License
-Copyright (c) 2026. Kang Junhyeok. All rights reserved.
+ISO/IEC 25023, 25051 품질 특성에 기반하여 TC를 설계했습니다.
 
----
+| 품질 특성 | 적용 영역 | 예시 |
+|-----------|-----------|------|
+| 기능 완전성 | 전체 JDBC 인터페이스 | 모든 메서드의 정상 동작 검증 |
+| 기능 정확성 | ResultSet getter, MetaData | 삽입값과 조회값 일치 검증 |
+| 오류 허용성 | 예외 케이스 | 닫힌 커넥션 접근 시 SQLException 발생 |
+| 기밀성 | Connection, 권한 | 잘못된 인증 정보로 접속 거부 |
+| 시간 반응성 | Batch, 대량 처리 | Atomic Batch 실행 성능 |
+
+## TC-메서드 매핑 규칙
+
+기존 TC 문서의 TC_ID와 JUnit 테스트 메서드는 다음 규칙으로 대응합니다.
+
+```
+TC_441_001 → DriverTest#testAcceptsURL()
+TC_447_001 → ConnectionTest#testClose()
+TC_468_001 → DatabaseMetaDataTest#testAllProceduresAreCallable()
+EXT_001    → AltibaseExtensionTest#testAutoGeneratedKeys()
+```
+
+`@DisplayName` 어노테이션에 TC_ID를 포함하여, Allure 리포트에서 원본 TC 문서와 1:1 추적이 가능합니다.
+
+## 개선 및 확장 계획
+
+- [ ] 동시성 테스트 — 다중 스레드 Lock/Deadlock 검증 추가
+- [ ] CI/CD 연동 — GitHub Actions 또는 Jenkins 파이프라인 구축
+- [ ] SQL 기반 TC 자동화 — 나머지 688건(isql 기반) 스크립트 전환
+- [ ] 성능 테스트 — 대량 DML 실행 시간 측정 및 리포트 통합
+- [ ] 장애/복구 테스트 — Shell 스크립트 기반 Altibase 프로세스 제어 자동화
+```
