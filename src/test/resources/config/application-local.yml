@@ -1,0 +1,6 @@
+execution:
+  enableDbTests: true
+  enableCliTests: true
+  enableDestructiveTests: false
+  enableRecoveryTests: false
+  enableReplicationTests: false
