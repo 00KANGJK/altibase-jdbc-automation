@@ -14,6 +14,7 @@ import java.sql.Types;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+@SuppressWarnings({"SqlNoDataSourceInspection", "SqlSourceToSinkFlow"})
 class PrivilegeGrantJdbcTest extends BaseDbTest {
 
     @Test
@@ -21,10 +22,10 @@ class PrivilegeGrantJdbcTest extends BaseDbTest {
     void tc300001AlterUserTcpAccess() {
         String user = createManagedUser("QA_TCP_USER");
 
-        jdbc.closeQuietly(jdbc.open(user, user));
+        openAndClose(user, user);
         jdbc.executeUpdate(connection, "alter user " + user + " disable tcp");
 
-        assertThatThrownBy(() -> jdbc.open(user, user))
+        assertThatThrownBy(() -> openAndClose(user, user))
                 .isInstanceOf(IllegalStateException.class);
     }
 
@@ -35,7 +36,7 @@ class PrivilegeGrantJdbcTest extends BaseDbTest {
 
         jdbc.executeUpdate(connection, "alter user " + user + " account lock");
 
-        assertThatThrownBy(() -> jdbc.open(user, user))
+        assertThatThrownBy(() -> openAndClose(user, user))
                 .isInstanceOf(IllegalStateException.class);
     }
 
@@ -51,7 +52,7 @@ class PrivilegeGrantJdbcTest extends BaseDbTest {
 
         withUserConnection(grantee, conn -> jdbc.executeUpdate(conn, "alter user " + target + " account lock"));
 
-        assertThatThrownBy(() -> jdbc.open(target, target))
+        assertThatThrownBy(() -> openAndClose(target, target))
                 .isInstanceOf(IllegalStateException.class);
     }
 
@@ -891,7 +892,7 @@ class PrivilegeGrantJdbcTest extends BaseDbTest {
 
     @Test
     @DisplayName("Additional negative case: role-granted CREATE PROCEDURE is not honored as own-schema CREATE")
-    void tc313Neg001RoleGrantedCreateProcedureStillFails() throws Exception {
+    void tc313Neg001RoleGrantedCreateProcedureStillFails() {
         String user = createManagedUser("QA_PROC_ROLE_ONLY");
         String role = createManagedRole("QA_PROC_ROLE_ONLY");
         String procedureName = DbTestSupport.uniqueName("QA_PROC_ROLE_FAIL");
@@ -923,7 +924,7 @@ class PrivilegeGrantJdbcTest extends BaseDbTest {
 
     @Test
     @DisplayName("Additional negative case: role-granted CREATE SYNONYM is not honored as own-schema CREATE")
-    void tc318Neg002RoleGrantedCreateSynonymStillFails() throws Exception {
+    void tc318Neg002RoleGrantedCreateSynonymStillFails() {
         String user = createManagedUser("QA_SYN_ROLE_ONLY");
         String role = createManagedRole("QA_SYN_ROLE_ONLY");
         String synonymName = DbTestSupport.uniqueName("QA_SYN_ROLE_FAIL");
@@ -962,7 +963,7 @@ class PrivilegeGrantJdbcTest extends BaseDbTest {
 
     @Test
     @DisplayName("Additional negative case: CREATE ANY SYNONYM is required for cross-schema private synonyms")
-    void tc318Neg001CreateAnySynonymWithoutPrivilegeFails() throws Exception {
+    void tc318Neg001CreateAnySynonymWithoutPrivilegeFails() {
         String owner = createManagedUser("QA_SYN_NEG_OWNER");
         String user = createManagedUser("QA_SYN_NEG_USER");
         String synonymName = DbTestSupport.uniqueName("QA_SYN_NEG");
@@ -1029,7 +1030,7 @@ class PrivilegeGrantJdbcTest extends BaseDbTest {
         jdbc.executeUpdate(conn, "create or replace procedure " + qualifiedProcedureName + "(p1 out integer) as begin p1 := 1; end;");
     }
 
-    private int executeOutProcedure(Connection conn, String qualifiedProcedureName) throws Exception {
+    private int executeOutProcedure(Connection conn, String qualifiedProcedureName) {
         try (CallableStatement cs = conn.prepareCall("{call " + qualifiedProcedureName + "(?)}")) {
             cs.registerOutParameter(1, Types.INTEGER);
             cs.execute();
@@ -1142,11 +1143,16 @@ class PrivilegeGrantJdbcTest extends BaseDbTest {
     }
 
     private void withUserConnection(String user, SqlWork work) throws Exception {
-        Connection userConnection = jdbc.open(user, user);
-        try {
+        try (Connection userConnection = jdbc.open(user, user)) {
             work.run(userConnection);
-        } finally {
-            jdbc.closeQuietly(userConnection);
+        }
+    }
+
+    private void openAndClose(String user, String password) {
+        try (Connection ignored = jdbc.open(user, password)) {
+            // Connection is intentionally opened only to verify authentication/access state.
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to close JDBC connection for user: " + user, e);
         }
     }
 

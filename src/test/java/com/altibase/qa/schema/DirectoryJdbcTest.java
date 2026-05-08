@@ -13,6 +13,7 @@ import java.sql.SQLException;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+@SuppressWarnings({"SqlNoDataSourceInspection", "SqlSourceToSinkFlow"})
 class DirectoryJdbcTest extends BaseDbTest {
 
     @Test

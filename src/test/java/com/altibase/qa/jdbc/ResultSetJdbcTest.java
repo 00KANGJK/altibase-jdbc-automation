@@ -22,6 +22,7 @@ import javax.sql.rowset.serial.SerialBlob;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+@SuppressWarnings({"SqlNoDataSourceInspection", "deprecation"})
 class ResultSetJdbcTest extends BaseDbTest {
 
     @Test
@@ -515,9 +516,11 @@ class ResultSetJdbcTest extends BaseDbTest {
     void tc601001IsAfterLast() throws Exception {
         try (Statement stmt = connection.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
              ResultSet rs = stmt.executeQuery("select 1 as c1 from dual union all select 2 from dual")) {
+            int rowCount = 0;
             while (rs.next()) {
-                // advance to end
+                rowCount++;
             }
+            assertThat(rowCount).isEqualTo(2);
             assertThat(rs.isAfterLast()).isTrue();
         }
     }

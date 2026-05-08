@@ -14,16 +14,15 @@ import java.sql.PreparedStatement;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+@SuppressWarnings("SqlNoDataSourceInspection")
 class JdbcDriverContractJdbcTest extends BaseDbTest {
 
     @Test
     @DisplayName("Additional contract case: transaction isolation changes require an explicit transaction")
     void changingTransactionIsolationRequiresExplicitTransaction() {
         assertThatThrownBy(() -> connection.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED))
-                .satisfies(throwable -> {
-                    assertThat(SqlExceptionSupport.requireSqlException(throwable).getMessage())
-                            .containsIgnoringCase("autocommit mode");
-                });
+                .satisfies(throwable -> assertThat(SqlExceptionSupport.requireSqlException(throwable).getMessage())
+                        .containsIgnoringCase("autocommit mode"));
     }
 
     @Test
@@ -43,10 +42,8 @@ class JdbcDriverContractJdbcTest extends BaseDbTest {
             preparedStatement.setBlob(2, blob);
 
             assertThatThrownBy(preparedStatement::executeUpdate)
-                    .satisfies(throwable -> {
-                        assertThat(SqlExceptionSupport.requireSqlException(throwable).getMessage())
-                                .containsIgnoringCase("autocommit mode");
-                    });
+                    .satisfies(throwable -> assertThat(SqlExceptionSupport.requireSqlException(throwable).getMessage())
+                            .containsIgnoringCase("autocommit mode"));
         }
     }
 
@@ -67,10 +64,8 @@ class JdbcDriverContractJdbcTest extends BaseDbTest {
             preparedStatement.setClob(2, clob);
 
             assertThatThrownBy(preparedStatement::executeUpdate)
-                    .satisfies(throwable -> {
-                        assertThat(SqlExceptionSupport.requireSqlException(throwable).getMessage())
-                                .containsIgnoringCase("autocommit mode");
-                    });
+                    .satisfies(throwable -> assertThat(SqlExceptionSupport.requireSqlException(throwable).getMessage())
+                            .containsIgnoringCase("autocommit mode"));
         }
     }
 }

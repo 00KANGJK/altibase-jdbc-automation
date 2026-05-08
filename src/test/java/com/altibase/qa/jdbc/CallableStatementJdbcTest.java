@@ -16,6 +16,7 @@ import java.sql.Types;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+@SuppressWarnings({"SqlNoDataSourceInspection", "deprecation"})
 class CallableStatementJdbcTest extends BaseDbTest {
 
     @Test

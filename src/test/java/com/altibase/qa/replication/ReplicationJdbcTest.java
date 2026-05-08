@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+@SuppressWarnings({"SqlNoDataSourceInspection", "SameParameterValue"})
 class ReplicationJdbcTest extends BaseDbTest {
 
     @Test

@@ -11,6 +11,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@SuppressWarnings("SqlNoDataSourceInspection")
 class CommunicationFunctionJdbcTest extends BaseDbTest {
 
     @Test

@@ -54,7 +54,6 @@ public final class ConfigLoader {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private static void applyEnvOverrides(Map<String, Object> root) {
         setIfPresent(root, "db", "host", "ALTIBASE_TEST_DB_HOST");
         setIfPresent(root, "db", "port", "ALTIBASE_TEST_DB_PORT");

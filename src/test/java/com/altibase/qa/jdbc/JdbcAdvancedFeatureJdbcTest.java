@@ -22,6 +22,7 @@ import java.sql.Statement;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+@SuppressWarnings({"SqlNoDataSourceInspection", "SqlSourceToSinkFlow"})
 class JdbcAdvancedFeatureJdbcTest extends BaseDbTest {
 
     @Test
@@ -163,7 +164,7 @@ class JdbcAdvancedFeatureJdbcTest extends BaseDbTest {
 
     @Test
     @DisplayName("Additional manual case: JDBC ESCAPE syntax matches literal wildcard characters")
-    void jdbcEscapeClauseMatchesLiteralWildcardCharacters() throws Exception {
+    void jdbcEscapeClauseMatchesLiteralWildcardCharacters() {
         String tableName = DbTestSupport.uniqueName("QA_ESCAPE_LIKE");
         registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, tableName));
 

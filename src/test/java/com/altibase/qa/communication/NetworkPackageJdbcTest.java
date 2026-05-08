@@ -11,6 +11,7 @@ import java.sql.Types;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@SuppressWarnings("SqlNoDataSourceInspection")
 class NetworkPackageJdbcTest extends BaseDbTest {
 
     @Test

@@ -12,15 +12,7 @@ public abstract class BaseCliTest extends BaseTest {
         FeatureProbe.assumeCliUtilitiesEnabled(config);
     }
 
-    protected void requireDestructiveTestsEnabled() {
-        FeatureProbe.assumeServerLifecycleEnabled(config);
-    }
-
     protected void requireRecoveryTestsEnabled() {
         FeatureProbe.assumeRecoveryEnabled(config);
-    }
-
-    protected void requireReplicationTestsEnabled() {
-        FeatureProbe.assumeReplicationSuiteEnabled(config);
     }
 }

@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+@SuppressWarnings("SqlSourceToSinkFlow")
 public class JdbcHelper {
     private final TestConfig config;
 
@@ -154,6 +155,7 @@ public class JdbcHelper {
         try {
             connection.close();
         } catch (SQLException ignored) {
+            // Best-effort cleanup helper.
         }
     }
 

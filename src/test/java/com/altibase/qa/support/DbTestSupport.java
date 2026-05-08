@@ -9,6 +9,7 @@ import java.sql.SQLException;
 import java.util.Locale;
 import java.util.UUID;
 
+@SuppressWarnings("SqlSourceToSinkFlow")
 public final class DbTestSupport {
     private DbTestSupport() {
     }
@@ -126,6 +127,7 @@ public final class DbTestSupport {
             try {
                 jdbc.executeUpdate(connection, "drop database link " + databaseLinkName);
             } catch (Exception alsoIgnored) {
+                // Ignore both supported drop syntaxes during cleanup.
             }
         }
     }

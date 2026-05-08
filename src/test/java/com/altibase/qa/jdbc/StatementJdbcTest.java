@@ -12,6 +12,7 @@ import java.sql.Statement;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+@SuppressWarnings({"SqlNoDataSourceInspection", "MagicConstant"})
 class StatementJdbcTest extends BaseDbTest {
 
     @Test

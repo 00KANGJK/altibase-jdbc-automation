@@ -24,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
+@SuppressWarnings({"SqlNoDataSourceInspection", "SqlSourceToSinkFlow", "UnnecessaryUnicodeEscape"})
 class DataTypeBoundaryJdbcTest extends BaseDbTest {
 
     @Test

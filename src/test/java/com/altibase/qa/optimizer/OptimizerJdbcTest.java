@@ -12,6 +12,7 @@ import java.sql.SQLException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@SuppressWarnings({"SqlNoDataSourceInspection", "SqlSourceToSinkFlow"})
 class OptimizerJdbcTest extends BaseDbTest {
 
     @Test
@@ -51,7 +52,7 @@ class OptimizerJdbcTest extends BaseDbTest {
 
     @Test
     @DisplayName("TC_366_001 SQL Plan Cache reuse metrics can be queried")
-    void tc366001QueryPlanCacheReuse() throws Exception {
+    void tc366001QueryPlanCacheReuse() {
         JoinSample sample = createJoinSample("QA_PLAN_CACHE_REUSE");
         String sql = "select count(*) from " + sample.ordersTable + " where eno = 1";
 
@@ -146,7 +147,9 @@ class OptimizerJdbcTest extends BaseDbTest {
         try (AltibaseStatement stmt = (AltibaseStatement) connection.createStatement();
              ResultSet rs = stmt.executeQuery("select * from " + tableName)) {
             int count = 0;
-            while (rs.next()) count++;
+            while (rs.next()) {
+                count++;
+            }
             assertThat(count).isGreaterThan(0);
             assertThat(stmt.getExplainPlan()).isNotNull().isNotBlank();
             assertThat(stmt.getExplainPlan().toUpperCase()).contains("SCAN");
@@ -164,6 +167,7 @@ class OptimizerJdbcTest extends BaseDbTest {
         altiConn.setExplainPlan(AltibaseConnection.EXPLAIN_PLAN_ONLY);
         try (AltibaseStatement stmt = (AltibaseStatement) connection.createStatement();
              ResultSet rs = stmt.executeQuery("select * from " + tableName)) {
+            assertThat(rs).isNotNull();
             assertThat(stmt.getExplainPlan()).isNotNull().isNotBlank();
         } finally {
             altiConn.setExplainPlan(AltibaseConnection.EXPLAIN_PLAN_OFF);
@@ -180,7 +184,9 @@ class OptimizerJdbcTest extends BaseDbTest {
         try (AltibaseStatement stmt = (AltibaseStatement) connection.createStatement();
              ResultSet rs = stmt.executeQuery("select * from " + tableName)) {
             int count = 0;
-            while (rs.next()) count++;
+            while (rs.next()) {
+                count++;
+            }
             assertThat(count).isGreaterThan(0);
             String plan = null;
             try {

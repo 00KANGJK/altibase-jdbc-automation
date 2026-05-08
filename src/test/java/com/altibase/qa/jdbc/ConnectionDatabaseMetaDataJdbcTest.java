@@ -18,6 +18,7 @@ import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@SuppressWarnings("SqlNoDataSourceInspection")
 class ConnectionDatabaseMetaDataJdbcTest extends BaseDbTest {
 
     @Test
