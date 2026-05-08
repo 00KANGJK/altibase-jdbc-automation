@@ -9,7 +9,6 @@ import java.sql.SQLException;
 import java.util.Locale;
 import java.util.UUID;
 
-@SuppressWarnings("SqlSourceToSinkFlow")
 public final class DbTestSupport {
     private DbTestSupport() {
     }

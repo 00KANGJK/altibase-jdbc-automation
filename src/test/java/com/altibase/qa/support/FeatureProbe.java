@@ -38,16 +38,6 @@ public final class FeatureProbe {
         );
     }
 
-    public static void assumeServerLifecycleEnabled(TestConfig config) {
-        assumeEnabled(
-                config.execution().enableDestructiveTests()
-                        && config.features().backupRecovery()
-                        && config.features().serverLifecycle(),
-                "serverLifecycle",
-                "execution.enableDestructiveTests, features.backupRecovery, and features.serverLifecycle must be true before server start/stop tests run"
-        );
-    }
-
     public static void assumeReplicationAvailable(TestConfig config, JdbcHelper jdbc, Connection connection) {
         assumeReplicationSuiteEnabled(config);
 

@@ -22,7 +22,7 @@ import java.sql.Statement;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@SuppressWarnings({"SqlNoDataSourceInspection", "SqlSourceToSinkFlow"})
+@SuppressWarnings("SqlNoDataSourceInspection")
 class JdbcAdvancedFeatureJdbcTest extends BaseDbTest {
 
     @Test

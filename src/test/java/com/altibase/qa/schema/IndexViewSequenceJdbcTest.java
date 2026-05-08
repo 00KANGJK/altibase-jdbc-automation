@@ -15,7 +15,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@SuppressWarnings({"SqlNoDataSourceInspection", "SqlSourceToSinkFlow", "SameParameterValue"})
+@SuppressWarnings({"SqlNoDataSourceInspection", "SameParameterValue"})
 class IndexViewSequenceJdbcTest extends BaseDbTest {
 
     @Test

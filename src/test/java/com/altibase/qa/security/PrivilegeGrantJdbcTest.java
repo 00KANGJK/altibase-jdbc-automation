@@ -14,7 +14,7 @@ import java.sql.Types;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@SuppressWarnings({"SqlNoDataSourceInspection", "SqlSourceToSinkFlow"})
+@SuppressWarnings("SqlNoDataSourceInspection")
 class PrivilegeGrantJdbcTest extends BaseDbTest {
 
     @Test
@@ -1149,8 +1149,8 @@ class PrivilegeGrantJdbcTest extends BaseDbTest {
     }
 
     private void openAndClose(String user, String password) {
-        try (Connection ignored = jdbc.open(user, password)) {
-            // Connection is intentionally opened only to verify authentication/access state.
+        try (Connection userConnection = jdbc.open(user, password)) {
+            assertThat(userConnection.isClosed()).isFalse();
         } catch (SQLException e) {
             throw new IllegalStateException("Failed to close JDBC connection for user: " + user, e);
         }

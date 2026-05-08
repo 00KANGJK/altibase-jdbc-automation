@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
-@SuppressWarnings({"SqlNoDataSourceInspection", "SqlSourceToSinkFlow"})
+@SuppressWarnings("SqlNoDataSourceInspection")
 class DatabaseLinkJdbcTest extends BaseDbTest {
 
     @Test
