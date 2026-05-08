@@ -2,24 +2,18 @@ package com.altibase.qa.replication;
 
 import com.altibase.qa.base.BaseDbTest;
 import com.altibase.qa.infra.jdbc.QueryResult;
-import org.junit.jupiter.api.Assumptions;
+import com.altibase.qa.support.FeatureProbe;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledOnOs;
-import org.junit.jupiter.api.condition.OS;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@DisabledOnOs(OS.WINDOWS)
 class ReplicationPropertySmokeTest extends BaseDbTest {
 
     @Test
     @DisplayName("복제 관련 속성을 조회한다")
     void queryReplicationProperties() {
-        Assumptions.assumeTrue(
-                config.execution().enableReplicationTests(),
-                "Replication tests are disabled in config"
-        );
+        FeatureProbe.assumeReplicationSuiteEnabled(config);
 
         QueryResult result = jdbc.query(
                 connection,

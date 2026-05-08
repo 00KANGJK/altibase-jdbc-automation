@@ -74,6 +74,23 @@ class IndexViewSequenceJdbcTest extends BaseDbTest {
     }
 
     @Test
+    @DisplayName("Additional negative case: duplicate index names are rejected")
+    void duplicateIndexNameIsRejected() {
+        String tableName = DbTestSupport.uniqueName("QA_DUP_IDX_TB");
+        String indexName = DbTestSupport.uniqueName("QA_DUP_IDX");
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, tableName));
+
+        jdbc.executeUpdate(connection, "create table " + tableName + "(c1 integer, c2 integer)");
+        jdbc.executeUpdate(connection, "create index " + indexName + " on " + tableName + "(c1)");
+
+        assertThatThrownBy(() -> jdbc.executeUpdate(connection, "create index " + indexName + " on " + tableName + "(c2)"))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(jdbc.exists(connection,
+                "select index_name from system_.sys_indices_ where index_name = '" + indexName + "'"))
+                .isTrue();
+    }
+
+    @Test
     @DisplayName("TC_084_001 alter an index to enable direct key")
     void tc084001AlterIndexToDirectKey() {
         String tableName = DbTestSupport.uniqueName("QA_ALT_DIRECTKEY_TB");
@@ -140,6 +157,21 @@ class IndexViewSequenceJdbcTest extends BaseDbTest {
     }
 
     @Test
+    @DisplayName("Additional negative case: dropping an already dropped index fails")
+    void droppingAlreadyDroppedIndexFails() {
+        String tableName = DbTestSupport.uniqueName("QA_DROP_IDX_NEG_TB");
+        String indexName = DbTestSupport.uniqueName("QA_DROP_IDX_NEG");
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, tableName));
+
+        jdbc.executeUpdate(connection, "create table " + tableName + "(c1 int)");
+        jdbc.executeUpdate(connection, "create index " + indexName + " on " + tableName + "(c1)");
+        jdbc.executeUpdate(connection, "drop index " + indexName);
+
+        assertThatThrownBy(() -> jdbc.executeUpdate(connection, "drop index " + indexName))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     @DisplayName("TC_086_001 create a local index on a partitioned table")
     void tc086001CreateLocalIndexOnPartitionedTable() {
         String tableName = DbTestSupport.uniqueName("QA_LOCAL_IDX_TB");
@@ -152,6 +184,76 @@ class IndexViewSequenceJdbcTest extends BaseDbTest {
         assertThat(jdbc.queryForString(connection,
                 "select is_partitioned from system_.sys_indices_ where index_name = '" + indexName + "'")).isEqualTo("T");
         assertThat(indexPartitionCount(indexName)).isGreaterThanOrEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("TC_086_002 각각의 인덱스 파티션을 지정해서 로컬 인덱스를 생성할 수 있는지 확인")
+    void tc086002CreateLocalIndexWithPartitionNames() {
+        String tableName = DbTestSupport.uniqueName("QA_LIDX_PN_TB");
+        String indexName = DbTestSupport.uniqueName("QA_LIDX_PN");
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, tableName));
+
+        createRangePartitionedIndexTable(tableName);
+        jdbc.executeUpdate(connection,
+                "create index " + indexName + " on " + tableName + "(sales_date) local " +
+                        "(partition idx_p1 on part_1, partition idx_p2 on part_2, " +
+                        "partition idx_p3 on part_3, partition idx_pdef on part_def)");
+
+        assertThat(jdbc.queryForString(connection,
+                "select is_partitioned from system_.sys_indices_ where index_name = '" + indexName + "'")).isEqualTo("T");
+        assertThat(indexPartitionCount(indexName)).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("TC_087_001 인덱스 파티션을 특정 테이블스페이스에 구축할 수 있는지 확인")
+    void tc087001AlterPartitionedIndexTablespace() {
+        String tableName = DbTestSupport.uniqueName("QA_PIDX_TBS_TB");
+        String indexName = DbTestSupport.uniqueName("QA_PIDX_TBS");
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, tableName));
+
+        createRangePartitionedIndexTable(tableName);
+        jdbc.executeUpdate(connection,
+                "create index " + indexName + " on " + tableName + "(sales_date) local " +
+                        "(partition idx_p1 on part_1, partition idx_p2 on part_2, " +
+                        "partition idx_p3 on part_3, partition idx_pdef on part_def)");
+
+        jdbc.executeUpdate(connection,
+                "alter index " + indexName + " rebuild partition idx_p1 tablespace SYS_TBS_MEMORY");
+
+        assertThat(indexPartitionCount(indexName)).isGreaterThanOrEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("TC_088_001 인덱스 파티션을 제거할 수 있는지 확인")
+    void tc088001DropPartitionedIndex() {
+        String tableName = DbTestSupport.uniqueName("QA_PIDX_DRP_TB");
+        String indexName = DbTestSupport.uniqueName("QA_PIDX_DRP");
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, tableName));
+
+        createRangePartitionedIndexTable(tableName);
+        jdbc.executeUpdate(connection,
+                "create index " + indexName + " on " + tableName + "(sales_date) local");
+        assertThat(jdbc.exists(connection,
+                "select index_name from system_.sys_indices_ where index_name = '" + indexName + "'")).isTrue();
+
+        jdbc.executeUpdate(connection, "drop index " + indexName);
+
+        assertThat(jdbc.exists(connection,
+                "select index_name from system_.sys_indices_ where index_name = '" + indexName + "'")).isFalse();
+    }
+
+    @Test
+    @DisplayName("TC_089_001 B-Tree 인덱스를 생성할 수 있는지 확인")
+    void tc089001CreateBTreeIndex() {
+        String tableName = DbTestSupport.uniqueName("QA_BTREE_TB");
+        String indexName = DbTestSupport.uniqueName("QA_BTREE_IDX");
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, tableName));
+
+        jdbc.executeUpdate(connection, "create table " + tableName + "(c1 integer, c2 varchar(20))");
+        jdbc.executeUpdate(connection, "create index " + indexName + " on " + tableName + "(c1) indextype is btree");
+
+        assertThat(jdbc.exists(connection,
+                "select index_name from system_.sys_indices_ where index_name = '" + indexName + "'")).isTrue();
     }
 
     @Test
@@ -227,6 +329,23 @@ class IndexViewSequenceJdbcTest extends BaseDbTest {
         jdbc.executeUpdate(connection, "create or replace view " + viewName + " as select c1, v2 from " + src1 + ", " + src2);
 
         assertThat(jdbc.queryForString(connection, "select v2 from " + viewName + " where c1 = 1").trim()).isEqualTo("B");
+    }
+
+    @Test
+    @DisplayName("Additional negative case: duplicate view names require CREATE OR REPLACE")
+    void duplicateViewNameRequiresCreateOrReplace() {
+        String src = DbTestSupport.uniqueName("QA_VIEW_DUP_SRC");
+        String viewName = DbTestSupport.uniqueName("QA_VIEW_DUP");
+        registerCleanup(() -> DbTestSupport.dropViewQuietly(jdbc, connection, viewName));
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, src));
+
+        jdbc.executeUpdate(connection, "create table " + src + "(c1 int, c2 int)");
+        jdbc.executeUpdate(connection, "insert into " + src + " values(1, 2)");
+        jdbc.executeUpdate(connection, "create view " + viewName + " as select c1 from " + src);
+
+        assertThatThrownBy(() -> jdbc.executeUpdate(connection, "create view " + viewName + " as select c2 from " + src))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(jdbc.query(connection, "select * from " + viewName).columns()).containsExactly("C1");
     }
 
     @Test
@@ -408,6 +527,23 @@ class IndexViewSequenceJdbcTest extends BaseDbTest {
     }
 
     @Test
+    @DisplayName("Additional negative case: aggregate views are not updatable")
+    void aggregateViewRejectsDml() {
+        String src = DbTestSupport.uniqueName("QA_VIEW_AGG_SRC");
+        String viewName = DbTestSupport.uniqueName("QA_VIEW_AGG");
+        registerCleanup(() -> DbTestSupport.dropViewQuietly(jdbc, connection, viewName));
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, src));
+
+        jdbc.executeUpdate(connection, "create table " + src + "(c1 int)");
+        jdbc.executeUpdate(connection, "insert into " + src + " values(1)");
+        jdbc.executeUpdate(connection, "create view " + viewName + " as select count(*) as cnt from " + src);
+
+        assertThatThrownBy(() -> jdbc.executeUpdate(connection, "insert into " + viewName + " values(2)"))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(jdbc.queryForString(connection, "select cnt from " + viewName)).isEqualTo("1");
+    }
+
+    @Test
     @DisplayName("TC_096_001 refresh complete on demand updates the materialized view only when requested")
     void tc096001RefreshMaterializedViewOnDemand() throws Exception {
         String tableName = DbTestSupport.uniqueName("QA_MV_REFRESH_SRC");
@@ -488,6 +624,17 @@ class IndexViewSequenceJdbcTest extends BaseDbTest {
     }
 
     @Test
+    @DisplayName("Additional negative case: zero sequence increments are rejected")
+    void zeroSequenceIncrementIsRejected() {
+        String sequenceName = DbTestSupport.uniqueName("QA_ZERO_INC_SEQ");
+        registerCleanup(() -> dropSequenceQuietly(sequenceName));
+
+        assertThatThrownBy(() ->
+                jdbc.executeUpdate(connection, "create sequence " + sequenceName + " start with 1 increment by 0"))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     @DisplayName("TC_098_003 create a sequence with enable sync table")
     void tc098003CreateSequenceWithSyncTable() {
         String sequenceName = DbTestSupport.uniqueName("QA_SYNC_CREATE_SEQ");
@@ -518,6 +665,19 @@ class IndexViewSequenceJdbcTest extends BaseDbTest {
 
         assertThat(jdbc.queryForString(connection, "select " + sequenceName + ".nextval from dual")).isEqualTo("13");
         assertThat(jdbc.queryForString(connection, "select " + sequenceName + ".nextval from dual")).isEqualTo("14");
+    }
+
+    @Test
+    @DisplayName("Additional negative case: altering a sequence to zero increment is rejected")
+    void alterSequenceToZeroIncrementIsRejected() {
+        String sequenceName = DbTestSupport.uniqueName("QA_ALT_ZERO_SEQ");
+        registerCleanup(() -> dropSequenceQuietly(sequenceName));
+
+        jdbc.executeUpdate(connection, "create sequence " + sequenceName + " start with 1 increment by 1");
+
+        assertThatThrownBy(() -> jdbc.executeUpdate(connection, "alter sequence " + sequenceName + " increment by 0"))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(jdbc.queryForString(connection, "select " + sequenceName + ".nextval from dual")).isEqualTo("1");
     }
 
     @Test

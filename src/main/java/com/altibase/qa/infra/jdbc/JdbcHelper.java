@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 
 public class JdbcHelper {
     private final TestConfig config;
@@ -56,6 +57,22 @@ public class JdbcHelper {
             return connection;
         } catch (SQLException e) {
             throw new IllegalStateException("Failed to open JDBC connection for user: " + user, e);
+        }
+    }
+
+    public Connection openSysdba() {
+        loadDriver();
+        try {
+            Properties properties = new Properties();
+            properties.put("user", config.db().user());
+            properties.put("password", config.db().password());
+            properties.put("privilege", "sysdba");
+
+            Connection connection = DriverManager.getConnection(config.db().jdbcUrl(), properties);
+            connection.setAutoCommit(true);
+            return connection;
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to open SYSDBA JDBC connection", e);
         }
     }
 

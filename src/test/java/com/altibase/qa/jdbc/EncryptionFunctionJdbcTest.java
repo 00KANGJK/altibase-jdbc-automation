@@ -2,6 +2,7 @@ package com.altibase.qa.jdbc;
 
 import com.altibase.qa.base.BaseDbTest;
 import com.altibase.qa.support.DbTestSupport;
+import com.altibase.qa.support.SqlExceptionSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -155,6 +156,69 @@ class EncryptionFunctionJdbcTest extends BaseDbTest {
     }
 
     @Test
+    @DisplayName("Additional boundary case: AES ciphertext differs from plaintext and decrypts with the original key")
+    void aesCipherTextDiffersFromPlaintextAndDecryptsWithOriginalKey() {
+        String tableName = createEncryptedTable("QA_AES_CIPHER");
+        String plainText = "SENSITIVE AES TEXT";
+        insertEncrypted(tableName, "aesencrypt(pkcs7pad16('" + plainText + "'), 'WORRAPS1WORRAPS2')");
+
+        assertCipherTextIsStoredAndNotPlainText(tableName, plainText);
+        assertQueryEquals(
+                "select pkcs7unpad16(aesdecrypt(encrypted_string, 'WORRAPS1WORRAPS2')) from " + tableName,
+                plainText
+        );
+    }
+
+    @Test
+    @DisplayName("Additional boundary case: DES ciphertext differs from plaintext and decrypts with the original key")
+    void desCipherTextDiffersFromPlaintextAndDecryptsWithOriginalKey() {
+        String tableName = createEncryptedTable("QA_DES_CIPHER");
+        String plainText = "SENSITIVE DES TEXT";
+        insertEncrypted(tableName, "desencrypt(pkcs7pad16('" + plainText + "'), 'altibase')");
+
+        assertCipherTextIsStoredAndNotPlainText(tableName, plainText);
+        assertQueryEquals(
+                "select pkcs7unpad16(desdecrypt(encrypted_string, 'altibase')) from " + tableName,
+                plainText
+        );
+    }
+
+    @Test
+    @DisplayName("Additional boundary case: PKCS7PAD16 supports exact 16-byte block AES round-trips")
+    void pkcs7Pad16SupportsExactBlockBoundaryRoundTrip() {
+        assertQueryEquals(
+                "select pkcs7unpad16(aesdecrypt(aesencrypt(pkcs7pad16('1234567890ABCDEF'), 'WORRAPS1WORRAPS2'), 'WORRAPS1WORRAPS2')) from dual",
+                "1234567890ABCDEF"
+        );
+    }
+
+    @Test
+    @DisplayName("Additional negative case: AES decrypt with a wrong key cannot recover the plaintext")
+    void aesDecryptWithWrongKeyDoesNotRecoverPlaintext() {
+        String tableName = createEncryptedTable("QA_AES_WRONG_KEY");
+        String plainText = "WRONG KEY AES TEXT";
+        insertEncrypted(tableName, "aesencrypt(pkcs7pad16('" + plainText + "'), 'WORRAPS1WORRAPS2')");
+
+        assertWrongKeyDoesNotReturnPlainText(
+                "select pkcs7unpad16(aesdecrypt(encrypted_string, 'WORRAPS1WORRAPS9')) from " + tableName,
+                plainText
+        );
+    }
+
+    @Test
+    @DisplayName("Additional negative case: DES decrypt with a wrong key cannot recover the plaintext")
+    void desDecryptWithWrongKeyDoesNotRecoverPlaintext() {
+        String tableName = createEncryptedTable("QA_DES_WRONG_KEY");
+        String plainText = "WRONG KEY DES TEXT";
+        insertEncrypted(tableName, "desencrypt(pkcs7pad16('" + plainText + "'), 'altibase')");
+
+        assertWrongKeyDoesNotReturnPlainText(
+                "select pkcs7unpad16(desdecrypt(encrypted_string, 'wrongkey')) from " + tableName,
+                plainText
+        );
+    }
+
+    @Test
     @DisplayName("Additional negative case: AESENCRYPT rejects unpadded input with an incompatible key length")
     void aesEncryptRejectsInvalidLengthInputs() {
         String tableName = createEncryptedTable("QA_AES_INVALID");
@@ -178,6 +242,21 @@ class EncryptionFunctionJdbcTest extends BaseDbTest {
     private void assertStoredCipherText(String tableName) {
         assertThat(jdbc.queryForString(connection,
                 "select case when encrypted_string is null then 'N' else 'Y' end from " + tableName)).isEqualTo("Y");
+    }
+
+    private void assertCipherTextIsStoredAndNotPlainText(String tableName, String plainText) {
+        assertThat(jdbc.queryForString(
+                connection,
+                "select case when encrypted_string is not null and encrypted_string <> '" + plainText + "' then 'Y' else 'N' end from " + tableName
+        )).isEqualTo("Y");
+    }
+
+    private void assertWrongKeyDoesNotReturnPlainText(String sql, String plainText) {
+        try {
+            assertThat(jdbc.queryForString(connection, sql)).isNotEqualTo(plainText);
+        } catch (IllegalStateException exception) {
+            assertThat((Object) SqlExceptionSupport.findSqlException(exception)).isNotNull();
+        }
     }
 
     private void assertQueryEquals(String sql, String expected) {

@@ -5,6 +5,8 @@ import com.altibase.qa.support.DbTestSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.sql.ResultSet;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -297,6 +299,70 @@ class NonPartitionedTableJdbcTest extends BaseDbTest {
     @Test
     @DisplayName("TC_073_001 ON COMMIT DELETE ROWS 임시 테이블은 커밋 후 행이 지워진다")
     void tc073001TemporaryTableDeleteRows() {
+        executeTemporaryTableDeleteRowsCase();
+    }
+
+    @Test
+    @DisplayName("Additional manual case: CREATE TABLE AS SELECT copies source rows")
+    void createTableAsSelectCopiesRows() {
+        String sourceTable = DbTestSupport.uniqueName("QA_CTAS_SRC");
+        String copiedTable = DbTestSupport.uniqueName("QA_CTAS_DST");
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, copiedTable));
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, sourceTable));
+
+        jdbc.executeUpdate(connection, "create table " + sourceTable + "(c1 int, c2 varchar(20))");
+        jdbc.executeUpdate(connection, "insert into " + sourceTable + " values (1, 'A')");
+        jdbc.executeUpdate(connection, "insert into " + sourceTable + " values (2, 'B')");
+        jdbc.executeUpdate(connection, "create table " + copiedTable + " as select * from " + sourceTable);
+
+        assertThat(DbTestSupport.tableExists(connection, null, copiedTable)).isTrue();
+        assertThat(jdbc.queryForString(connection, "select count(*) from " + copiedTable)).isEqualTo("2");
+        assertThat(jdbc.queryForString(connection, "select c2 from " + copiedTable + " where c1 = 2")).isEqualTo("B");
+    }
+
+    @Test
+    @DisplayName("Additional manual case: ALTER TABLE RENAME COLUMN updates column metadata")
+    void renameColumnChangesMetadata() {
+        String tableName = DbTestSupport.uniqueName("QA_TB_REN_COL");
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, tableName));
+
+        jdbc.executeUpdate(connection, "create table " + tableName + "(c1 int, c2 varchar(20))");
+        jdbc.executeUpdate(connection, "alter table " + tableName + " rename column c1 to c1_new");
+
+        assertThat(DbTestSupport.columnExists(connection, null, tableName, "C1")).isFalse();
+        assertThat(DbTestSupport.columnExists(connection, null, tableName, "C1_NEW")).isTrue();
+    }
+
+    @Test
+    @DisplayName("Additional manual case: ALTER TABLE MODIFY COLUMN changes declared length")
+    void modifyColumnChangesDeclaredLength() throws Exception {
+        String tableName = DbTestSupport.uniqueName("QA_TB_MOD_COL");
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, tableName));
+
+        jdbc.executeUpdate(connection, "create table " + tableName + "(c1 varchar(20))");
+        jdbc.executeUpdate(connection, "alter table " + tableName + " modify column c1 varchar(100)");
+
+        try (ResultSet columns = connection.getMetaData().getColumns(null, null, tableName, "C1")) {
+            assertThat(columns.next()).isTrue();
+            assertThat(columns.getInt("COLUMN_SIZE")).isEqualTo(100);
+        }
+    }
+
+    @Test
+    @DisplayName("Additional manual case: ACCESS READ ONLY rejects inserts")
+    void accessReadOnlyRejectsInsert() {
+        String tableName = DbTestSupport.uniqueName("QA_TB_READONLY");
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, tableName));
+
+        jdbc.executeUpdate(connection, "create table " + tableName + "(c1 int)");
+        jdbc.executeUpdate(connection, "alter table " + tableName + " access read only");
+
+        assertThatThrownBy(() ->
+                jdbc.executeUpdate(connection, "insert into " + tableName + " values (1)"))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    private void executeTemporaryTableDeleteRowsCase() {
         String tablespaceName = DbTestSupport.uniqueName("QA_VOL_TBS_DEL");
         String tableName = DbTestSupport.uniqueName("QA_TMP_DEL");
         registerCleanup(() -> DbTestSupport.dropTablespaceQuietly(jdbc, connection, tablespaceName));

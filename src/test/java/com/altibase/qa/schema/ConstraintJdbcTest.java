@@ -68,6 +68,49 @@ class ConstraintJdbcTest extends BaseDbTest {
     }
 
     @Test
+    @DisplayName("Additional negative case: unique constraints reject duplicate values before they are dropped")
+    void uniqueConstraintRejectsDuplicatesBeforeDrop() {
+        String tableName = DbTestSupport.uniqueName("QA_UK_NEG");
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, tableName));
+
+        jdbc.executeUpdate(connection, "create table " + tableName + "(bno integer unique)");
+        jdbc.executeUpdate(connection, "insert into " + tableName + " values(1)");
+
+        assertThatThrownBy(() -> jdbc.executeUpdate(connection, "insert into " + tableName + " values(1)"))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(jdbc.queryForString(connection, "select count(*) from " + tableName)).isEqualTo("1");
+    }
+
+    @Test
+    @DisplayName("Additional negative case: NOT NULL constraints reject null values")
+    void notNullConstraintRejectsNullInserts() {
+        String tableName = DbTestSupport.uniqueName("QA_NN_NEG");
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, tableName));
+
+        jdbc.executeUpdate(connection, "create table " + tableName + "(c1 integer not null)");
+
+        assertThatThrownBy(() -> jdbc.executeUpdate(connection, "insert into " + tableName + " values(null)"))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(jdbc.queryForString(connection, "select count(*) from " + tableName)).isEqualTo("0");
+    }
+
+    @Test
+    @DisplayName("Additional negative case: CHECK constraints reject out-of-range values")
+    void checkConstraintRejectsOutOfRangeValues() {
+        String tableName = DbTestSupport.uniqueName("QA_CK_NEG");
+        String constraintName = DbTestSupport.uniqueName("QA_CK");
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, tableName));
+
+        jdbc.executeUpdate(connection,
+                "create table " + tableName + "(score integer constraint " + constraintName + " check(score between 0 and 100))");
+        jdbc.executeUpdate(connection, "insert into " + tableName + " values(100)");
+
+        assertThatThrownBy(() -> jdbc.executeUpdate(connection, "insert into " + tableName + " values(101)"))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(jdbc.queryForString(connection, "select count(*) from " + tableName)).isEqualTo("1");
+    }
+
+    @Test
     @DisplayName("TC_080_001 alter table drop unique(column)")
     void tc080001DropUniqueConstraintByColumn() {
         String tableName = DbTestSupport.uniqueName("QA_DROP_UK");
@@ -112,6 +155,46 @@ class ConstraintJdbcTest extends BaseDbTest {
 
         assertThatThrownBy(() -> jdbc.executeUpdate(connection,
                 "insert into " + child + "(id, isbn) values(1, 'NOTFOUND')"))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    @DisplayName("Additional negative case: foreign keys reject deleting a referenced parent row")
+    void foreignKeyRejectsDeletingReferencedParentRow() {
+        String parent = DbTestSupport.uniqueName("QA_FK_PARENT_NEG");
+        String child = DbTestSupport.uniqueName("QA_FK_CHILD_NEG");
+        String fkName = DbTestSupport.uniqueName("QA_FK_NEG");
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, child));
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, parent));
+
+        jdbc.executeUpdate(connection, "create table " + parent + "(id integer primary key)");
+        jdbc.executeUpdate(connection,
+                "create table " + child + "(id integer primary key, parent_id integer, constraint " + fkName +
+                        " foreign key(parent_id) references " + parent + "(id))");
+        jdbc.executeUpdate(connection, "insert into " + parent + " values(1)");
+        jdbc.executeUpdate(connection, "insert into " + child + " values(1, 1)");
+
+        assertThatThrownBy(() -> jdbc.executeUpdate(connection, "delete from " + parent + " where id = 1"))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(jdbc.queryForString(connection, "select count(*) from " + parent)).isEqualTo("1");
+        assertThat(jdbc.queryForString(connection, "select count(*) from " + child)).isEqualTo("1");
+    }
+
+    @Test
+    @DisplayName("Additional negative case: referenced primary keys cannot be dropped while a foreign key exists")
+    void referencedPrimaryKeyCannotBeDroppedWhileForeignKeyExists() {
+        String parent = DbTestSupport.uniqueName("QA_PK_PARENT_NEG");
+        String child = DbTestSupport.uniqueName("QA_PK_CHILD_NEG");
+        String fkName = DbTestSupport.uniqueName("QA_PK_FK_NEG");
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, child));
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, parent));
+
+        jdbc.executeUpdate(connection, "create table " + parent + "(id integer primary key)");
+        jdbc.executeUpdate(connection,
+                "create table " + child + "(id integer primary key, parent_id integer, constraint " + fkName +
+                        " foreign key(parent_id) references " + parent + "(id))");
+
+        assertThatThrownBy(() -> jdbc.executeUpdate(connection, "alter table " + parent + " drop primary key"))
                 .isInstanceOf(IllegalStateException.class);
     }
 

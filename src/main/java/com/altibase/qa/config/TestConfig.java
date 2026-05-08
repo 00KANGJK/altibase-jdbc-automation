@@ -6,6 +6,10 @@ public record TestConfig(
         ClientConfig client,
         ServerConfig server,
         PathsConfig paths,
+        FeaturesConfig features,
+        DatabaseLinkConfig databaseLink,
+        ReplicationConfig replication,
+        NetworkConfig network,
         TimeoutConfig timeouts,
         ExecutionConfig execution
 ) {
@@ -49,6 +53,38 @@ public record TestConfig(
             String exportDir,
             String scriptDir,
             String logCaptureDir
+    ) {}
+
+    public record FeaturesConfig(
+            boolean directoryFileIo,
+            boolean databaseLink,
+            boolean storedPackages,
+            boolean utlTcp,
+            boolean utlSmtp,
+            boolean queue,
+            boolean spatial,
+            boolean replication,
+            boolean backupRecovery,
+            boolean serverLifecycle,
+            boolean cliUtilities
+    ) {}
+
+    public record DatabaseLinkConfig(
+            String targetName,
+            String remoteUser,
+            String remotePassword
+    ) {}
+
+    public record ReplicationConfig(
+            String remoteHost,
+            int remotePort
+    ) {}
+
+    public record NetworkConfig(
+            String tcpHost,
+            int tcpPort,
+            String smtpHost,
+            int smtpPort
     ) {}
 
     public record TimeoutConfig(

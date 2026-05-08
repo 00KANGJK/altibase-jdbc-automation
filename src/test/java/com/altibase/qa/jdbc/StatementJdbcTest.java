@@ -24,6 +24,17 @@ class StatementJdbcTest extends BaseDbTest {
     }
 
     @Test
+    @DisplayName("Additional negative case: closed Statement rejects execution")
+    void closedStatementRejectsExecution() throws Exception {
+        Statement stmt = connection.createStatement();
+        stmt.close();
+
+        assertThat(stmt.isClosed()).isTrue();
+        assertThatThrownBy(() -> stmt.execute("select user_name() from dual"))
+                .isInstanceOf(SQLException.class);
+    }
+
+    @Test
     @DisplayName("TC_627_001 Statement execute runs a query")
     void tc627001Execute() throws Exception {
         try (Statement stmt = connection.createStatement()) {
@@ -81,6 +92,16 @@ class StatementJdbcTest extends BaseDbTest {
         try (Statement stmt = connection.createStatement()) {
             stmt.setMaxRows(10);
             assertThat(stmt.getMaxRows()).isEqualTo(10);
+        }
+    }
+
+    @Test
+    @DisplayName("Additional negative case: negative row and timeout settings are rejected")
+    void negativeRowAndTimeoutSettingsAreRejected() throws Exception {
+        try (Statement stmt = connection.createStatement()) {
+            assertThatThrownBy(() -> stmt.setMaxRows(-1)).isInstanceOf(SQLException.class);
+            assertThatThrownBy(() -> stmt.setFetchSize(-1)).isInstanceOf(SQLException.class);
+            assertThatThrownBy(() -> stmt.setQueryTimeout(-1)).isInstanceOf(SQLException.class);
         }
     }
 
@@ -159,6 +180,26 @@ class StatementJdbcTest extends BaseDbTest {
         try (Statement stmt = connection.createStatement()) {
             assertThat(stmt.execute("insert into " + tableName + " values(1)")).isFalse();
             assertThat(stmt.getUpdateCount()).isEqualTo(1);
+        }
+    }
+
+    @Test
+    @DisplayName("Additional negative case: execute rejects malformed SQL")
+    void executeRejectsMalformedSql() throws Exception {
+        try (Statement stmt = connection.createStatement()) {
+            assertThatThrownBy(() -> stmt.execute("select from"))
+                    .isInstanceOf(SQLException.class);
+        }
+    }
+
+    @Test
+    @DisplayName("Additional negative case: executeQuery rejects missing objects")
+    void executeQueryRejectsMissingObjects() throws Exception {
+        String missingTableName = DbTestSupport.uniqueName("QA_STMT_MISSING");
+
+        try (Statement stmt = connection.createStatement()) {
+            assertThatThrownBy(() -> stmt.executeQuery("select * from " + missingTableName))
+                    .isInstanceOf(SQLException.class);
         }
     }
 

@@ -132,6 +132,214 @@ class OptimizerJdbcTest extends BaseDbTest {
         assertThat(executed.plan().toUpperCase()).contains("CACHE");
     }
 
+    // ========================================================================
+    // Explain Plan (TC_371 ~ TC_373)
+    // ========================================================================
+
+    @Test
+    @DisplayName("TC_371_001 EXPLAIN PLAN ON shows result records with plan tree info")
+    void tc371001ExplainPlanOn() throws Exception {
+        String tableName = createOrderedResultSample("QA_PLAN_ON");
+
+        AltibaseConnection altiConn = (AltibaseConnection) connection;
+        altiConn.setExplainPlan(AltibaseConnection.EXPLAIN_PLAN_ON);
+        try (AltibaseStatement stmt = (AltibaseStatement) connection.createStatement();
+             ResultSet rs = stmt.executeQuery("select * from " + tableName)) {
+            int count = 0;
+            while (rs.next()) count++;
+            assertThat(count).isGreaterThan(0);
+            assertThat(stmt.getExplainPlan()).isNotNull().isNotBlank();
+            assertThat(stmt.getExplainPlan().toUpperCase()).contains("SCAN");
+        } finally {
+            altiConn.setExplainPlan(AltibaseConnection.EXPLAIN_PLAN_OFF);
+        }
+    }
+
+    @Test
+    @DisplayName("TC_372_001 EXPLAIN PLAN ONLY shows plan info without executing the query")
+    void tc372001ExplainPlanOnly() throws Exception {
+        String tableName = createOrderedResultSample("QA_PLAN_ONLY");
+
+        AltibaseConnection altiConn = (AltibaseConnection) connection;
+        altiConn.setExplainPlan(AltibaseConnection.EXPLAIN_PLAN_ONLY);
+        try (AltibaseStatement stmt = (AltibaseStatement) connection.createStatement();
+             ResultSet rs = stmt.executeQuery("select * from " + tableName)) {
+            assertThat(stmt.getExplainPlan()).isNotNull().isNotBlank();
+        } finally {
+            altiConn.setExplainPlan(AltibaseConnection.EXPLAIN_PLAN_OFF);
+        }
+    }
+
+    @Test
+    @DisplayName("TC_373_001 EXPLAIN PLAN OFF shows only result records without plan tree")
+    void tc373001ExplainPlanOff() throws Exception {
+        String tableName = createOrderedResultSample("QA_PLAN_OFF");
+
+        AltibaseConnection altiConn = (AltibaseConnection) connection;
+        altiConn.setExplainPlan(AltibaseConnection.EXPLAIN_PLAN_OFF);
+        try (AltibaseStatement stmt = (AltibaseStatement) connection.createStatement();
+             ResultSet rs = stmt.executeQuery("select * from " + tableName)) {
+            int count = 0;
+            while (rs.next()) count++;
+            assertThat(count).isGreaterThan(0);
+            String plan = null;
+            try {
+                plan = stmt.getExplainPlan();
+            } catch (SQLException e) {
+                // Altibase throws SQLException when EXPLAIN PLAN is OFF - this is expected
+            }
+            assertThat(plan == null || plan.isBlank()).isTrue();
+        }
+    }
+
+    // ========================================================================
+    // Optimizer Hints (TC_374 ~ TC_385)
+    // ========================================================================
+
+    @Test
+    @DisplayName("TC_374_001 RULE hint forces rule-based optimization")
+    void tc374001RuleHint() throws Exception {
+        JoinSample sample = createJoinSample("QA_HINT_RULE");
+        ExecutedQuery exec = executeWithExplain(
+                "select /*+ RULE */ * from " + sample.employeesTable + " e, " + sample.ordersTable + " o where e.eno = o.eno");
+        assertThat(exec.rowCount()).isGreaterThan(0);
+        assertThat(exec.plan()).isNotNull().isNotBlank();
+    }
+
+    @Test
+    @DisplayName("TC_375_001 COST hint forces cost-based optimization")
+    void tc375001CostHint() throws Exception {
+        JoinSample sample = createJoinSample("QA_HINT_COST");
+        ExecutedQuery exec = executeWithExplain(
+                "select /*+ COST */ * from " + sample.employeesTable + " e, " + sample.ordersTable + " o where e.eno = o.eno");
+        assertThat(exec.rowCount()).isGreaterThan(0);
+        assertThat(exec.plan()).isNotNull().isNotBlank();
+    }
+
+    @Test
+    @DisplayName("TC_376_001 CNF hint applies conjunctive normal form to WHERE predicates")
+    void tc376001CnfHint() throws Exception {
+        JoinSample sample = createJoinSample("QA_HINT_CNF");
+        ExecutedQuery exec = executeWithExplain(
+                "select /*+ CNF */ * from " + sample.employeesTable +
+                        " where eno = 1 or eno = 2");
+        assertThat(exec.rowCount()).isGreaterThan(0);
+        assertThat(exec.plan()).isNotNull().isNotBlank();
+    }
+
+    @Test
+    @DisplayName("TC_377_001 DNF hint applies disjunctive normal form to WHERE predicates")
+    void tc377001DnfHint() throws Exception {
+        JoinSample sample = createJoinSample("QA_HINT_DNF");
+        ExecutedQuery exec = executeWithExplain(
+                "select /*+ DNF */ * from " + sample.employeesTable +
+                        " where eno = 1 or eno = 2");
+        assertThat(exec.rowCount()).isGreaterThan(0);
+        assertThat(exec.plan()).isNotNull().isNotBlank();
+    }
+
+    @Test
+    @DisplayName("TC_378_001 USE_NL hint forces nested loop join")
+    void tc378001NestedLoopHint() throws Exception {
+        JoinSample sample = createJoinSample("QA_HINT_NL");
+        ExecutedQuery exec = executeWithExplain(
+                "select /*+ USE_NL(e o) */ " +
+                        "* from " + sample.employeesTable + " e, " + sample.ordersTable + " o where e.eno = o.eno");
+        assertThat(exec.rowCount()).isGreaterThan(0);
+        assertThat(exec.plan().toUpperCase()).contains("JOIN");
+    }
+
+    @Test
+    @DisplayName("TC_379_001 USE_HASH hint forces hash join")
+    void tc379001HashHint() throws Exception {
+        JoinSample sample = createJoinSample("QA_HINT_HASH");
+        ExecutedQuery exec = executeWithExplain(
+                "select /*+ USE_HASH(e o) */ " +
+                        "* from " + sample.employeesTable + " e, " + sample.ordersTable + " o where e.eno = o.eno");
+        assertThat(exec.rowCount()).isGreaterThan(0);
+        assertThat(exec.plan().toUpperCase()).contains("HASH");
+    }
+
+    @Test
+    @DisplayName("TC_380_001 USE_SORT hint forces sort join")
+    void tc380001SortHint() throws Exception {
+        JoinSample sample = createJoinSample("QA_HINT_SORT");
+        ExecutedQuery exec = executeWithExplain(
+                "select /*+ USE_SORT(e o) */ " +
+                        "* from " + sample.employeesTable + " e, " + sample.ordersTable + " o where e.eno = o.eno");
+        assertThat(exec.rowCount()).isGreaterThan(0);
+        assertThat(exec.plan().toUpperCase()).contains("SORT");
+    }
+
+    @Test
+    @DisplayName("TC_381_001 USE_MERGE hint forces sort merge join")
+    void tc381001SortMergeHint() throws Exception {
+        JoinSample sample = createJoinSample("QA_HINT_MERGE");
+        ExecutedQuery exec = executeWithExplain(
+                "select /*+ USE_MERGE(e o) */ " +
+                        "* from " + sample.employeesTable + " e, " + sample.ordersTable + " o where e.eno = o.eno");
+        assertThat(exec.rowCount()).isGreaterThan(0);
+        assertThat(exec.plan()).isNotNull().isNotBlank();
+    }
+
+    @Test
+    @DisplayName("TC_382_001 HASH_BUCKET_COUNT hint sets hash bucket count in plan")
+    void tc382001HashBucketCountHint() throws Exception {
+        JoinSample sample = createJoinSample("QA_HINT_HBC");
+        ExecutedQuery exec = executeWithExplain(
+                "select /*+ HASH_BUCKET_COUNT(256) */ * from " + sample.ordersTable +
+                        " where eno in (select eno from " + sample.employeesTable + ")");
+        assertThat(exec.rowCount()).isGreaterThan(0);
+        assertThat(exec.plan()).isNotNull().isNotBlank();
+    }
+
+    @Test
+    @DisplayName("TC_383_001 GROUP_BUCKET_COUNT hint sets group bucket count in plan")
+    void tc383001GroupBucketCountHint() throws Exception {
+        String tableName = createOrderedResultSample("QA_HINT_GBC");
+        ExecutedQuery exec = executeWithExplain(
+                "select /*+ GROUP_BUCKET_COUNT(128) */ dno, count(*) from " + tableName + " group by dno");
+        assertThat(exec.rowCount()).isGreaterThan(0);
+        assertThat(exec.plan()).isNotNull().isNotBlank();
+    }
+
+    @Test
+    @DisplayName("TC_384_001 SET_BUCKET_COUNT hint sets set bucket count in plan")
+    void tc384001SetBucketCountHint() throws Exception {
+        String t1 = createOrderedResultSample("QA_HINT_SBC1");
+        String t2 = createOrderedResultSample("QA_HINT_SBC2");
+        ExecutedQuery exec = executeWithExplain(
+                "select /*+ SET_BUCKET_COUNT(128) */ eno from " + t1 +
+                        " union select eno from " + t2);
+        assertThat(exec.rowCount()).isGreaterThan(0);
+        assertThat(exec.plan()).isNotNull().isNotBlank();
+    }
+
+    @Test
+    @DisplayName("TC_385_001 PUSH_PRED hint pushes predicates into inline views")
+    void tc385001PushPredicateHint() throws Exception {
+        JoinSample sample = createJoinSample("QA_HINT_PP");
+        ExecutedQuery exec = executeWithExplain(
+                "select /*+ PUSH_PRED(v) */ * from " +
+                        "(select eno, cno from " + sample.ordersTable + ") v, " + sample.employeesTable + " e " +
+                        "where v.eno = e.eno");
+        assertThat(exec.rowCount()).isGreaterThan(0);
+        assertThat(exec.plan()).isNotNull().isNotBlank();
+    }
+
+    @Test
+    @DisplayName("Additional boundary case: unknown optimizer hints are ignored without changing query results")
+    void unknownOptimizerHintIsIgnoredWithoutChangingResults() throws Exception {
+        String tableName = createOrderedResultSample("QA_HINT_UNKNOWN");
+
+        ExecutedQuery executed = executeWithExplain(
+                "select /*+ UNKNOWN_ALTIBASE_QA_HINT */ eno from " + tableName + " where dno = 1001 order by eno"
+        );
+
+        assertThat(executed.rowCount()).isEqualTo(2);
+        assertThat(executed.plan()).contains(tableName);
+    }
+
     private JoinSample createJoinSample(String prefix) {
         String employeesTable = DbTestSupport.uniqueName(prefix + "_EMP");
         String customersTable = DbTestSupport.uniqueName(prefix + "_CUS");

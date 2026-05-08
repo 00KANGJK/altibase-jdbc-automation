@@ -119,6 +119,17 @@ public final class DbTestSupport {
         }
     }
 
+    public static void dropDatabaseLinkQuietly(JdbcHelper jdbc, Connection connection, String databaseLinkName) {
+        try {
+            jdbc.executeUpdate(connection, "drop private database link " + databaseLinkName);
+        } catch (Exception ignored) {
+            try {
+                jdbc.executeUpdate(connection, "drop database link " + databaseLinkName);
+            } catch (Exception alsoIgnored) {
+            }
+        }
+    }
+
     public static void dropTablespaceQuietly(JdbcHelper jdbc, Connection connection, String tablespaceName) {
         try {
             jdbc.executeUpdate(connection, "drop tablespace " + tablespaceName + " including contents");

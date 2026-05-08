@@ -1,8 +1,7 @@
 package com.altibase.qa.base;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.BeforeEach;
 
 import java.sql.Connection;
 
@@ -15,8 +14,8 @@ public abstract class BaseDbTest extends BaseTest {
         connection = jdbc.open();
     }
 
-    @AfterEach
-    void tearDownDb() {
+    @Override
+    protected void tearDownResources() {
         jdbc.closeQuietly(connection);
     }
 }

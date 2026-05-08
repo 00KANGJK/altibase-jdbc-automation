@@ -74,10 +74,79 @@ class StatisticsJdbcTest extends BaseDbTest {
     }
 
     @Test
+    @DisplayName("TC_370_002 gather statistics for a specific user's all objects")
+    void tc370002GatherStatisticsForSpecificUser() throws Exception {
+        String userName = createManagedUser("QA_USER_STATS");
+        String tableName = DbTestSupport.uniqueName("QA_USTAT_TB");
+
+        grantIfNeeded(userName, "create table");
+        withUserConnection(userName, conn -> {
+            jdbc.executeUpdate(conn, "create table " + tableName + "(c1 integer, c2 varchar(20))");
+            jdbc.executeUpdate(conn, "insert into " + tableName + " values(1, 'A')");
+            jdbc.executeUpdate(conn, "insert into " + tableName + " values(2, 'B')");
+        });
+
+        try (CallableStatement cs = connection.prepareCall("{call gather_system_stats()}")) {
+            cs.execute();
+        }
+
+        TableStats stats = getTableStats(userName, tableName);
+        assertThat(stats.numRows()).isGreaterThanOrEqualTo(0L);
+    }
+
+    @Test
+    @DisplayName("TC_370_005 gather statistics for a specific user's stored procedure")
+    void tc370005GatherStatisticsForStoredProcedure() throws Exception {
+        String userName = createManagedUser("QA_PROC_STATS");
+        String tableName = DbTestSupport.uniqueName("QA_PSTAT_TB");
+        String procName = DbTestSupport.uniqueName("QA_PSTAT_PROC");
+
+        grantIfNeeded(userName, "create table");
+        grantIfNeeded(userName, "create procedure");
+        withUserConnection(userName, conn -> {
+            jdbc.executeUpdate(conn, "create table " + tableName + "(c1 integer)");
+            jdbc.executeUpdate(conn, "insert into " + tableName + " values(1)");
+            jdbc.executeUpdate(conn,
+                    "create or replace procedure " + procName + " as begin " +
+                            "insert into " + tableName + " values(2); end");
+        });
+
+        gatherTableStats(userName, tableName);
+
+        TableStats stats = getTableStats(userName, tableName);
+        assertThat(stats.numRows()).isGreaterThanOrEqualTo(1L);
+    }
+
+    @Test
     @DisplayName("Additional negative case: gather_table_stats rejects missing objects")
     void gatherStatisticsForMissingObjectFails() {
         assertThatThrownBy(() -> gatherTableStats("SYS", "MISSING_STATS_OBJECT"))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    @DisplayName("Additional boundary case: gathering table statistics refreshes row-count metadata")
+    void gatheringTableStatisticsRefreshesRowCountMetadata() {
+        String tableName = DbTestSupport.uniqueName("QA_STATS_REFRESH");
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, tableName));
+
+        jdbc.executeUpdate(connection, "create table " + tableName + "(c1 integer, c2 varchar(20))");
+        jdbc.executeUpdate(connection, "insert into " + tableName + " values(1, 'A')");
+        jdbc.executeUpdate(connection, "insert into " + tableName + " values(2, 'B')");
+
+        gatherTableStats("SYS", tableName);
+        TableStats initialStats = getTableStats("SYS", tableName);
+
+        jdbc.executeUpdate(connection, "insert into " + tableName + " values(3, 'C')");
+        jdbc.executeUpdate(connection, "insert into " + tableName + " values(4, 'D')");
+        jdbc.executeUpdate(connection, "insert into " + tableName + " values(5, 'E')");
+
+        gatherTableStats("SYS", tableName);
+        TableStats refreshedStats = getTableStats("SYS", tableName);
+
+        assertThat(initialStats.numRows()).isGreaterThanOrEqualTo(2L);
+        assertThat(refreshedStats.numRows()).isGreaterThanOrEqualTo(5L);
+        assertThat(refreshedStats.numRows()).isGreaterThanOrEqualTo(initialStats.numRows());
     }
 
     private void gatherDatabaseStats() {

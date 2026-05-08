@@ -1,6 +1,25 @@
+# Copy this file to application-local.yml and keep it out of version control.
+# Put real hosts, passwords, and server paths only in the local override.
+
+db:
+  host: 127.0.0.1
+  port: 20300
+  database: mydb
+  user: sys
+  password: change-me
+  jdbcUrl: jdbc:Altibase://127.0.0.1:20300/mydb
+
 execution:
   enableDbTests: true
-  enableCliTests: true
-  enableDestructiveTests: true
-  enableRecoveryTests: true
-  enableReplicationTests: true
+  enableCliTests: false
+  enableDestructiveTests: false
+  enableRecoveryTests: false
+  enableReplicationTests: false
+
+features:
+  databaseLink: false
+  replication: false
+  backupRecovery: false
+  storedPackages: false
+  utlTcp: false
+  utlSmtp: false

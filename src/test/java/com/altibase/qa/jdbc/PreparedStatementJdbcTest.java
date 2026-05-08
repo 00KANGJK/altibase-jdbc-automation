@@ -13,12 +13,14 @@ import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
 import javax.sql.rowset.serial.SerialBlob;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PreparedStatementJdbcTest extends BaseDbTest {
 
@@ -497,6 +499,88 @@ class PreparedStatementJdbcTest extends BaseDbTest {
         }
 
         assertThat(jdbc.queryForString(connection, "select to_char(c1, 'YYYY-MM-DD HH24:MI:SS') from " + tableName)).isEqualTo("2024-01-02 03:04:05");
+    }
+
+    @Test
+    @DisplayName("Additional boundary case: executeBatch returns per-row update counts")
+    void executeBatchReturnsPerRowUpdateCounts() throws Exception {
+        String tableName = DbTestSupport.uniqueName("QA_PS_BATCH_COUNTS");
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, tableName));
+
+        jdbc.executeUpdate(connection, "create table " + tableName + "(c1 integer, c2 varchar(20))");
+
+        try (PreparedStatement ps = jdbc.prepare(connection, "insert into " + tableName + "(c1, c2) values(?, ?)")) {
+            for (int index = 1; index <= 3; index++) {
+                ps.setInt(1, index);
+                ps.setString(2, "BATCH-" + index);
+                ps.addBatch();
+            }
+
+            assertThat(ps.executeBatch()).containsExactly(1, 1, 1);
+        }
+
+        assertThat(jdbc.queryForString(connection, "select count(*) from " + tableName)).isEqualTo("3");
+    }
+
+    @Test
+    @DisplayName("Additional boundary case: setObject with explicit SQL types round-trips values")
+    void setObjectWithExplicitSqlTypesRoundTripsValues() throws Exception {
+        String tableName = DbTestSupport.uniqueName("QA_PS_OBJ_TYPES");
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, tableName));
+
+        jdbc.executeUpdate(connection,
+                "create table " + tableName + "(c_int integer, c_num numeric(8,2), c_text varchar(20), c_date date)");
+
+        try (PreparedStatement ps = jdbc.prepare(connection, "insert into " + tableName + " values(?, ?, ?, ?)")) {
+            ps.setObject(1, 7, Types.INTEGER);
+            ps.setObject(2, new BigDecimal("12.34"), Types.NUMERIC);
+            ps.setObject(3, "OBJECT-TEXT", Types.VARCHAR);
+            ps.setObject(4, Date.valueOf("2024-05-06"), Types.DATE);
+            assertThat(ps.executeUpdate()).isEqualTo(1);
+        }
+
+        try (PreparedStatement ps = jdbc.prepare(connection,
+                "select c_int, c_num, c_text, to_char(c_date, 'YYYY-MM-DD') as c_date_text from " + tableName);
+             ResultSet rs = ps.executeQuery()) {
+            assertThat(rs.next()).isTrue();
+            assertThat(rs.getInt("C_INT")).isEqualTo(7);
+            assertThat(rs.getBigDecimal("C_NUM")).isEqualByComparingTo(new BigDecimal("12.34"));
+            assertThat(rs.getString("C_TEXT")).isEqualTo("OBJECT-TEXT");
+            assertThat(rs.getString("C_DATE_TEXT")).isEqualTo("2024-05-06");
+        }
+    }
+
+    @Test
+    @DisplayName("Additional boundary case: setNull round-trips NULL across multiple SQL types")
+    void setNullRoundTripsAcrossMultipleSqlTypes() throws Exception {
+        String tableName = DbTestSupport.uniqueName("QA_PS_NULL_TYPES");
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, tableName));
+
+        jdbc.executeUpdate(connection,
+                "create table " + tableName + "(c_int integer, c_num numeric(8,2), c_text varchar(20), c_date date)");
+
+        try (PreparedStatement ps = jdbc.prepare(connection, "insert into " + tableName + " values(?, ?, ?, ?)")) {
+            ps.setNull(1, Types.INTEGER);
+            ps.setNull(2, Types.NUMERIC);
+            ps.setNull(3, Types.VARCHAR);
+            ps.setNull(4, Types.DATE);
+            assertThat(ps.executeUpdate()).isEqualTo(1);
+        }
+
+        assertThat(jdbc.queryForString(
+                connection,
+                "select count(c_int) + count(c_num) + count(c_text) + count(c_date) from " + tableName
+        )).isEqualTo("0");
+    }
+
+    @Test
+    @DisplayName("Additional negative case: closed PreparedStatement rejects execution")
+    void closedPreparedStatementRejectsExecution() throws Exception {
+        PreparedStatement ps = jdbc.prepare(connection, "select user_name() from dual");
+        ps.close();
+
+        assertThat(ps.isClosed()).isTrue();
+        assertThatThrownBy(ps::executeQuery).isInstanceOf(SQLException.class);
     }
 
     private static String readAll(Reader reader) throws Exception {

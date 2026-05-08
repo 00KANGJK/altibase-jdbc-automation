@@ -65,6 +65,15 @@ public final class ConfigLoader {
         setIfPresent(root, "client", "isql", "ALTIBASE_TEST_CLIENT_ISQL");
         setIfPresent(root, "server", "isql", "ALTIBASE_TEST_SERVER_ISQL");
         setIfPresent(root, "server", "server", "ALTIBASE_TEST_SERVER_BIN");
+        setIfPresent(root, "databaseLink", "targetName", "ALTIBASE_TEST_DBLINK_TARGET");
+        setIfPresent(root, "databaseLink", "remoteUser", "ALTIBASE_TEST_DBLINK_USER");
+        setIfPresent(root, "databaseLink", "remotePassword", "ALTIBASE_TEST_DBLINK_PASSWORD");
+        setIfPresent(root, "replication", "remoteHost", "ALTIBASE_TEST_REPLICATION_HOST");
+        setIfPresent(root, "replication", "remotePort", "ALTIBASE_TEST_REPLICATION_PORT");
+        setIfPresent(root, "network", "tcpHost", "ALTIBASE_TEST_TCP_HOST");
+        setIfPresent(root, "network", "tcpPort", "ALTIBASE_TEST_TCP_PORT");
+        setIfPresent(root, "network", "smtpHost", "ALTIBASE_TEST_SMTP_HOST");
+        setIfPresent(root, "network", "smtpPort", "ALTIBASE_TEST_SMTP_PORT");
 
         Map<String, Object> execution = map(root, "execution");
         String dbTests = System.getenv("ALTIBASE_ENABLE_DB_TESTS");
@@ -79,6 +88,19 @@ public final class ConfigLoader {
         if (destructive != null && !destructive.isBlank()) {
             execution.put("enableDestructiveTests", Boolean.parseBoolean(destructive));
         }
+
+        Map<String, Object> features = map(root, "features");
+        setBoolIfPresent(features, "directoryFileIo", "ALTIBASE_FEATURE_DIRECTORY_FILE_IO");
+        setBoolIfPresent(features, "databaseLink", "ALTIBASE_FEATURE_DATABASE_LINK");
+        setBoolIfPresent(features, "storedPackages", "ALTIBASE_FEATURE_STORED_PACKAGES");
+        setBoolIfPresent(features, "utlTcp", "ALTIBASE_FEATURE_UTL_TCP");
+        setBoolIfPresent(features, "utlSmtp", "ALTIBASE_FEATURE_UTL_SMTP");
+        setBoolIfPresent(features, "queue", "ALTIBASE_FEATURE_QUEUE");
+        setBoolIfPresent(features, "spatial", "ALTIBASE_FEATURE_SPATIAL");
+        setBoolIfPresent(features, "replication", "ALTIBASE_FEATURE_REPLICATION");
+        setBoolIfPresent(features, "backupRecovery", "ALTIBASE_FEATURE_BACKUP_RECOVERY");
+        setBoolIfPresent(features, "serverLifecycle", "ALTIBASE_FEATURE_SERVER_LIFECYCLE");
+        setBoolIfPresent(features, "cliUtilities", "ALTIBASE_FEATURE_CLI_UTILITIES");
     }
 
     private static void setIfPresent(Map<String, Object> root, String section, String key, String envName) {
@@ -87,6 +109,14 @@ public final class ConfigLoader {
             return;
         }
         map(root, section).put(key, value);
+    }
+
+    private static void setBoolIfPresent(Map<String, Object> section, String key, String envName) {
+        String value = System.getenv(envName);
+        if (value == null || value.isBlank()) {
+            return;
+        }
+        section.put(key, Boolean.parseBoolean(value));
     }
 
     @SuppressWarnings("unchecked")
@@ -100,6 +130,10 @@ public final class ConfigLoader {
         Map<String, Object> client = map(root, "client");
         Map<String, Object> server = map(root, "server");
         Map<String, Object> paths = map(root, "paths");
+        Map<String, Object> features = map(root, "features");
+        Map<String, Object> databaseLink = map(root, "databaseLink");
+        Map<String, Object> replication = map(root, "replication");
+        Map<String, Object> network = map(root, "network");
         Map<String, Object> timeouts = map(root, "timeouts");
         Map<String, Object> execution = map(root, "execution");
 
@@ -140,6 +174,34 @@ public final class ConfigLoader {
                         required(paths, "exportDir"),
                         required(paths, "scriptDir"),
                         required(paths, "logCaptureDir")
+                ),
+                new TestConfig.FeaturesConfig(
+                        bool(features, "directoryFileIo", false),
+                        bool(features, "databaseLink", false),
+                        bool(features, "storedPackages", false),
+                        bool(features, "utlTcp", false),
+                        bool(features, "utlSmtp", false),
+                        bool(features, "queue", true),
+                        bool(features, "spatial", true),
+                        bool(features, "replication", false),
+                        bool(features, "backupRecovery", false),
+                        bool(features, "serverLifecycle", false),
+                        bool(features, "cliUtilities", false)
+                ),
+                new TestConfig.DatabaseLinkConfig(
+                        string(databaseLink, "targetName", "QA_SELF"),
+                        string(databaseLink, "remoteUser", string(db, "user", "")),
+                        string(databaseLink, "remotePassword", string(db, "password", ""))
+                ),
+                new TestConfig.ReplicationConfig(
+                        string(replication, "remoteHost", "127.0.0.1"),
+                        integer(replication, "remotePort", 0)
+                ),
+                new TestConfig.NetworkConfig(
+                        string(network, "tcpHost", "127.0.0.1"),
+                        integer(network, "tcpPort", 19001),
+                        string(network, "smtpHost", "127.0.0.1"),
+                        integer(network, "smtpPort", 19025)
                 ),
                 new TestConfig.TimeoutConfig(
                         integer(timeouts, "connectSeconds", 10),

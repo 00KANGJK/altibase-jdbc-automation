@@ -11,6 +11,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
 
@@ -856,6 +858,98 @@ class ConnectionDatabaseMetaDataJdbcTest extends BaseDbTest {
                 assertThat(rs.getString("FUNCTION_NAME")).isEqualToIgnoringCase("ABS");
             }
         }
+    }
+
+    @Test
+    @DisplayName("Additional boundary case: DatabaseMetaData getColumns reports precision, scale, and nullability")
+    void getColumnsReportsPrecisionScaleAndNullability() throws Exception {
+        String tableName = DbTestSupport.uniqueName("QA_MD_COL_DETAIL");
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, tableName));
+
+        jdbc.executeUpdate(connection,
+                "create table " + tableName + "(c_required numeric(10,2) not null, c_text varchar(30))");
+
+        try (ResultSet rs = connection.getMetaData().getColumns(null, currentSchema(), tableName, "C_REQUIRED")) {
+            assertThat(rs.next()).isTrue();
+            assertThat(rs.getString("COLUMN_NAME")).isEqualToIgnoringCase("C_REQUIRED");
+            assertThat(rs.getInt("COLUMN_SIZE")).isEqualTo(10);
+            assertThat(rs.getInt("DECIMAL_DIGITS")).isEqualTo(2);
+            assertThat(rs.getInt("NULLABLE")).isEqualTo(DatabaseMetaData.columnNoNulls);
+        }
+
+        try (ResultSet rs = connection.getMetaData().getColumns(null, currentSchema(), tableName, "C_TEXT")) {
+            assertThat(rs.next()).isTrue();
+            assertThat(rs.getInt("COLUMN_SIZE")).isEqualTo(30);
+            assertThat(rs.getInt("NULLABLE")).isEqualTo(DatabaseMetaData.columnNullable);
+        }
+    }
+
+    @Test
+    @DisplayName("Additional boundary case: DatabaseMetaData getPrimaryKeys reports composite key order")
+    void getPrimaryKeysReportsCompositeKeyOrder() throws Exception {
+        String tableName = DbTestSupport.uniqueName("QA_MD_PK_ORDER");
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, tableName));
+
+        jdbc.executeUpdate(connection, "create table " + tableName + "(c1 integer, c2 integer, c3 varchar(10), primary key(c1, c2))");
+
+        List<String> columnsBySequence = new ArrayList<>();
+        try (ResultSet rs = connection.getMetaData().getPrimaryKeys(null, currentSchema(), tableName)) {
+            while (rs.next()) {
+                columnsBySequence.add(rs.getShort("KEY_SEQ") + ":" + rs.getString("COLUMN_NAME").toUpperCase(Locale.ROOT));
+            }
+        }
+
+        assertThat(columnsBySequence).containsExactly("1:C1", "2:C2");
+    }
+
+    @Test
+    @DisplayName("Additional boundary case: DatabaseMetaData getImportedKeys reports foreign key relationship")
+    void getImportedKeysReportsForeignKeyRelationship() throws Exception {
+        String parentTable = DbTestSupport.uniqueName("QA_MD_FK_PARENT");
+        String childTable = DbTestSupport.uniqueName("QA_MD_FK_CHILD");
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, parentTable));
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, childTable));
+
+        jdbc.executeUpdate(connection, "create table " + parentTable + "(id integer primary key)");
+        jdbc.executeUpdate(connection,
+                "create table " + childTable + "(id integer primary key, parent_id integer references " + parentTable + "(id))");
+
+        try (ResultSet rs = connection.getMetaData().getImportedKeys(null, currentSchema(), childTable)) {
+            assertThat(rs.next()).isTrue();
+            assertThat(rs.getString("PKTABLE_NAME")).isEqualToIgnoringCase(parentTable);
+            assertThat(rs.getString("FKTABLE_NAME")).isEqualToIgnoringCase(childTable);
+            assertThat(rs.getString("FKCOLUMN_NAME")).isEqualToIgnoringCase("PARENT_ID");
+            assertThat(rs.getString("PKCOLUMN_NAME")).isEqualToIgnoringCase("ID");
+        }
+    }
+
+    @Test
+    @DisplayName("Additional boundary case: DatabaseMetaData getIndexInfo reports unique index details")
+    void getIndexInfoReportsUniqueIndexDetails() throws Exception {
+        String tableName = DbTestSupport.uniqueName("QA_MD_UNQ_IDX_TB");
+        String indexName = DbTestSupport.uniqueName("QA_MD_UNQ_IDX");
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, tableName));
+
+        jdbc.executeUpdate(connection, "create table " + tableName + "(c1 integer, c2 varchar(20))");
+        jdbc.executeUpdate(connection, "create unique index " + indexName + " on " + tableName + "(c2)");
+
+        boolean found = false;
+        try (ResultSet rs = connection.getMetaData().getIndexInfo(null, currentSchema(), tableName, false, false)) {
+            while (rs.next()) {
+                if (indexName.equalsIgnoreCase(rs.getString("INDEX_NAME"))) {
+                    found = true;
+                    assertThat(rs.getBoolean("NON_UNIQUE")).isFalse();
+                    assertThat(rs.getShort("ORDINAL_POSITION")).isEqualTo((short) 1);
+                    assertThat(rs.getString("COLUMN_NAME")).isEqualToIgnoringCase("C2");
+                }
+            }
+        }
+
+        assertThat(found).isTrue();
+    }
+
+    private String currentSchema() {
+        return config.db().user().toUpperCase(Locale.ROOT);
     }
 
     private void createSimpleOutProcedure(String procedureName) {

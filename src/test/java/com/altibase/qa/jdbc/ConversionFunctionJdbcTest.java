@@ -2,6 +2,7 @@ package com.altibase.qa.jdbc;
 
 import com.altibase.qa.base.BaseDbTest;
 import com.altibase.qa.infra.jdbc.QueryResult;
+import com.altibase.qa.support.SqlExceptionSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -173,6 +174,38 @@ class ConversionFunctionJdbcTest extends BaseDbTest {
     }
 
     @Test
+    @DisplayName("Additional boundary case: numeric base conversion functions round-trip values")
+    void numericBaseConversionsRoundTrip() {
+        assertQueryEquals("select bin_to_num(to_bin(42)) from dual", "42");
+        assertQueryEquals("select hex_to_num(to_hex(255)) from dual", "255");
+        assertQueryEquals("select oct_to_num(to_oct(73)) from dual", "73");
+    }
+
+    @Test
+    @DisplayName("Additional boundary case: HEX and RAW conversion functions preserve ASCII payloads")
+    void hexAndRawConversionsRoundTripAsciiPayloads() {
+        assertQueryEquals("select hex_decode(hex_encode('ALTIBASE')) from dual", "ALTIBASE");
+        assertQueryEquals("select raw_to_varchar(to_raw('ALTIBASE')) from dual", "ALTIBASE");
+    }
+
+    @Test
+    @DisplayName("Additional boundary case: DATE_TO_UNIX and UNIX_TO_DATE round-trip timestamps")
+    void unixDateConversionsRoundTripTimestamps() {
+        assertQueryEquals(
+                "select to_char(unix_to_date(date_to_unix(to_date('2024-01-02 03:04:05','YYYY-MM-DD HH24:MI:SS'))),'YYYY-MM-DD HH24:MI:SS') from dual",
+                "2024-01-02 03:04:05"
+        );
+    }
+
+    @Test
+    @DisplayName("Additional negative case: base conversion functions reject invalid digits")
+    void baseConversionFunctionsRejectInvalidDigits() {
+        assertSqlFails("select bin_to_num('102') from dual");
+        assertSqlFails("select oct_to_num('89') from dual");
+        assertSqlFails("select hex_to_num('FG') from dual");
+    }
+
+    @Test
     @DisplayName("Additional negative case: TO_NUMBER rejects incompatible formats")
     void toNumberRejectsInvalidFormats() {
         assertThatThrownBy(() ->
@@ -190,6 +223,12 @@ class ConversionFunctionJdbcTest extends BaseDbTest {
 
     private void assertQueryEquals(String sql, String expected) {
         assertThat(jdbc.queryForString(connection, sql)).isEqualTo(expected);
+    }
+
+    private void assertSqlFails(String sql) {
+        assertThatThrownBy(() -> jdbc.queryForString(connection, sql))
+                .isInstanceOf(IllegalStateException.class)
+                .satisfies(throwable -> assertThat((Object) SqlExceptionSupport.findSqlException(throwable)).isNotNull());
     }
 
     private String toHex(byte[] bytes) {

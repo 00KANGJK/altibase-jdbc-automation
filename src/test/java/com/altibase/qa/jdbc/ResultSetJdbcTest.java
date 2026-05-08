@@ -823,6 +823,62 @@ class ResultSetJdbcTest extends BaseDbTest {
         }
     }
 
+    @Test
+    @DisplayName("Additional boundary case: scrollable ResultSet moves with absolute, previous, and last")
+    void scrollableResultSetMovesAcrossRows() throws Exception {
+        try (Statement stmt = connection.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
+             ResultSet rs = stmt.executeQuery(
+                     "select 1 as c1 from dual union all select 2 from dual union all select 3 from dual order by c1"
+             )) {
+            assertThat(rs.absolute(2)).isTrue();
+            assertThat(rs.getInt("C1")).isEqualTo(2);
+            assertThat(rs.previous()).isTrue();
+            assertThat(rs.getInt("C1")).isEqualTo(1);
+            assertThat(rs.last()).isTrue();
+            assertThat(rs.getInt("C1")).isEqualTo(3);
+            assertThat(rs.getRow()).isEqualTo(3);
+        }
+    }
+
+    @Test
+    @DisplayName("Additional boundary case: wasNull reports NULL after primitive getters")
+    void wasNullReportsNullAfterPrimitiveGetter() throws Exception {
+        try (Statement stmt = connection.createStatement();
+             ResultSet rs = stmt.executeQuery("select cast(null as integer) as c1 from dual")) {
+            assertThat(rs.next()).isTrue();
+            assertThat(rs.getInt("C1")).isEqualTo(0);
+            assertThat(rs.wasNull()).isTrue();
+        }
+    }
+
+    @Test
+    @DisplayName("Additional boundary case: getObject returns expected Java types for basic columns")
+    void getObjectReturnsExpectedJavaTypesForBasicColumns() throws Exception {
+        try (Statement stmt = connection.createStatement();
+             ResultSet rs = stmt.executeQuery(
+                     "select cast(7 as integer) as c_int, cast(12.34 as numeric(8,2)) as c_num, " +
+                             "'ALTIBASE' as c_text, to_date('2024-05-06','YYYY-MM-DD') as c_date from dual"
+             )) {
+            assertThat(rs.next()).isTrue();
+            assertThat(rs.getObject("C_INT")).isInstanceOf(Number.class);
+            assertThat(rs.getBigDecimal("C_NUM")).isEqualByComparingTo(new BigDecimal("12.34"));
+            assertThat(rs.getObject("C_TEXT")).isInstanceOf(String.class);
+            assertThat(rs.getDate("C_DATE")).isEqualTo(Date.valueOf("2024-05-06"));
+        }
+    }
+
+    @Test
+    @DisplayName("Additional negative case: closed ResultSet rejects cursor movement")
+    void closedResultSetRejectsCursorMovement() throws Exception {
+        Statement stmt = connection.createStatement();
+        ResultSet rs = stmt.executeQuery("select 1 from dual");
+        rs.close();
+        stmt.close();
+
+        assertThat(rs.isClosed()).isTrue();
+        assertThatThrownBy(rs::next).isInstanceOf(SQLException.class);
+    }
+
     private static String readAll(Reader reader) throws IOException {
         StringBuilder builder = new StringBuilder();
         char[] buffer = new char[128];

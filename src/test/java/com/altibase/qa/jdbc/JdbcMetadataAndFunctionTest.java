@@ -3,6 +3,7 @@ package com.altibase.qa.jdbc;
 import com.altibase.qa.base.BaseDbTest;
 import com.altibase.qa.infra.jdbc.QueryResult;
 import com.altibase.qa.support.DbTestSupport;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -523,6 +524,44 @@ class JdbcMetadataAndFunctionTest extends BaseDbTest {
     }
 
     @Test
+    @DisplayName("Additional manual case: DENSE_RANK assigns the same rank to ties without gaps")
+    void denseRankWindowFunctionWorks() {
+        String tableName = DbTestSupport.uniqueName("QA_FUNC_DENSE_RANK");
+        registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, tableName));
+
+        jdbc.executeUpdate(connection, "create table " + tableName + "(c1 integer)");
+        jdbc.executeUpdate(connection, "insert into " + tableName + " values(10)");
+        jdbc.executeUpdate(connection, "insert into " + tableName + " values(10)");
+        jdbc.executeUpdate(connection, "insert into " + tableName + " values(20)");
+        jdbc.executeUpdate(connection, "insert into " + tableName + " values(30)");
+
+        QueryResult result = jdbc.query(
+                connection,
+                "select c1, dense_rank() over (order by c1) as dense_rank_value from " + tableName + " order by c1"
+        );
+
+        assertThat(((Number) result.value(0, "DENSE_RANK_VALUE")).intValue()).isEqualTo(1);
+        assertThat(((Number) result.value(1, "DENSE_RANK_VALUE")).intValue()).isEqualTo(1);
+        assertThat(((Number) result.value(2, "DENSE_RANK_VALUE")).intValue()).isEqualTo(2);
+        assertThat(((Number) result.value(3, "DENSE_RANK_VALUE")).intValue()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("Additional manual case: LEAD returns the following row value")
+    void leadWindowFunctionWorks() {
+        String tableName = createAnalyticSampleTable("QA_FUNC_LEAD");
+
+        QueryResult result = jdbc.query(
+                connection,
+                "select salary, lead(salary, 1, 0) over (order by salary) as lead_value from " + tableName + " order by salary"
+        );
+
+        assertThat(((Number) result.value(0, "LEAD_VALUE")).intValue()).isEqualTo(150);
+        assertThat(((Number) result.value(1, "LEAD_VALUE")).intValue()).isEqualTo(200);
+        assertThat(((Number) result.value(5, "LEAD_VALUE")).intValue()).isEqualTo(0);
+    }
+
+    @Test
     @DisplayName("TC_125_011 STDDEV function returns standard deviation")
     void tc125011Stddev() {
         String tableName = createAnalyticSampleTable("QA_FUNC_STDDEV");
@@ -848,6 +887,18 @@ class JdbcMetadataAndFunctionTest extends BaseDbTest {
     void tc161002Ascii() {
         QueryResult result = jdbc.query(connection, "select ascii('A') as ascii_value from dual");
         assertThat(((Number) result.value(0, "ASCII_VALUE")).intValue()).isEqualTo(65);
+    }
+
+    @Test
+    @DisplayName("TC_161_003 CHOSUNG extracts Korean initial consonants")
+    void tc161003Chosung() {
+        String databaseCharacterSet = databaseCharacterSet();
+        Assumptions.assumeTrue(isKsc5601(databaseCharacterSet),
+                "CHOSUNG requires KSC5601 database character set; actual=" + databaseCharacterSet);
+
+        String value = jdbc.queryForString(connection, "select chosung('알티베이스') as chosung from dual");
+
+        assertThat(value).isEqualTo("ㅇㅌㅂㅇㅅ");
     }
 
     @Test
@@ -1318,6 +1369,67 @@ class JdbcMetadataAndFunctionTest extends BaseDbTest {
     @DisplayName("TC_242_001 SESSION_ID function can be queried")
     void tc242001SessionId() {
         assertThat(jdbc.query(connection, "select session_id() as sid from dual").size()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("TC_248_001 current session identity functions align with V$SESSION metadata")
+    void tc248001CurrentSessionIdentityMatchesVSession() {
+        QueryResult result = jdbc.query(
+                connection,
+                "select user_name() as uname, user_id() as uid, session_id() as sid from dual"
+        );
+
+        QueryResult sessionView = jdbc.query(
+                connection,
+                "select id as sid, db_username, db_userid from v$session where id = session_id()"
+        );
+
+        assertThat(result.size()).isEqualTo(1);
+        assertThat(sessionView.size()).isEqualTo(1);
+        assertThat(String.valueOf(result.value(0, "UNAME")))
+                .isEqualToIgnoringCase(String.valueOf(sessionView.value(0, "DB_USERNAME")));
+        assertThat(String.valueOf(result.value(0, "UID")))
+                .isEqualTo(String.valueOf(sessionView.value(0, "DB_USERID")));
+        assertThat(String.valueOf(result.value(0, "SID")))
+                .isEqualTo(String.valueOf(sessionView.value(0, "SID")));
+    }
+
+    @Test
+    @DisplayName("Additional monitoring case: the current session is visible in V$SESSION")
+    void currentSessionIsVisibleInVSession() {
+        QueryResult sessionView = jdbc.query(
+                connection,
+                "select id as sid, db_username, session_state, client_type from v$session where id = session_id()"
+        );
+
+        assertThat(sessionView.size()).isEqualTo(1);
+        assertThat(Integer.parseInt(String.valueOf(sessionView.value(0, "SID")))).isGreaterThan(0);
+        assertThat(String.valueOf(sessionView.value(0, "DB_USERNAME"))).isEqualToIgnoringCase(config.db().user());
+        assertThat(String.valueOf(sessionView.value(0, "SESSION_STATE"))).isEqualToIgnoringCase("SERVICE");
+        assertThat(String.valueOf(sessionView.value(0, "CLIENT_TYPE"))).containsIgnoringCase("JDBC");
+    }
+
+    private String databaseCharacterSet() {
+        String value = tryQueryForString("select nls_characterset from v$nls_parameters");
+        if (value != null && !value.isBlank()) {
+            return value;
+        }
+        return tryQueryForString("select value1 from v$property where name = 'NLS_CHARACTERSET'");
+    }
+
+    private String tryQueryForString(String sql) {
+        try {
+            return jdbc.queryForString(connection, sql);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private boolean isKsc5601(String characterSet) {
+        if (characterSet == null) {
+            return false;
+        }
+        return characterSet.toUpperCase().replace("-", "").replace("_", "").contains("KSC5601");
     }
 
     private String createAnalyticSampleTable(String prefix) {

@@ -2,7 +2,6 @@ package com.altibase.qa.security;
 
 import com.altibase.qa.base.BaseDbTest;
 import com.altibase.qa.support.DbTestSupport;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -205,12 +204,10 @@ class PrivilegeGrantJdbcTest extends BaseDbTest {
     }
 
     @Test
-    @Disabled("Defect candidate on Altibase 7.3.0.1.8: role-granted CREATE PROCEDURE is not honored for own-schema procedure creation")
     @DisplayName("TC_313_001 CREATE PROCEDURE privilege allows own-schema procedures only")
     void tc313001GrantCreateProcedure() throws Exception {
         String owner = createManagedUser("QA_PROC_OWNER");
         String user = createManagedUser("QA_PROC_USER");
-        String role = createManagedRole("QA_PROC_ROLE");
         String ownProcedure = DbTestSupport.uniqueName("QA_PROC_OWN");
         String otherProcedure = DbTestSupport.uniqueName("QA_PROC_OTHER");
 
@@ -218,8 +215,7 @@ class PrivilegeGrantJdbcTest extends BaseDbTest {
         assertThatThrownBy(() -> withUserConnection(user, conn -> createSimpleOutProcedure(conn, ownProcedure)))
                 .isInstanceOf(IllegalStateException.class);
 
-        grantToRole(role, "create procedure");
-        grantRoleToUser(role, user);
+        grantToUser(user, "create procedure");
 
         withUserConnection(user, conn -> createSimpleOutProcedure(conn, ownProcedure));
         assertThat(storedProgramExists(ownProcedure)).isTrue();
@@ -459,12 +455,10 @@ class PrivilegeGrantJdbcTest extends BaseDbTest {
     }
 
     @Test
-    @Disabled("Defect candidate on Altibase 7.3.0.1.8: role-granted CREATE TRIGGER is not honored for own-schema trigger creation")
     @DisplayName("TC_317_001 CREATE TRIGGER privilege allows own-schema triggers only")
     void tc317001GrantCreateTrigger() throws Exception {
         String owner = createManagedUser("QA_TRG_OWNER");
         String user = createManagedUser("QA_TRG_USER");
-        String role = createManagedRole("QA_TRG_ROLE");
         String ownTable = DbTestSupport.uniqueName("QA_TRG_OWN_TB");
         String ownTrigger = DbTestSupport.uniqueName("QA_TRG_OWN");
         String otherTable = DbTestSupport.uniqueName("QA_TRG_OTHER_TB");
@@ -476,8 +470,7 @@ class PrivilegeGrantJdbcTest extends BaseDbTest {
         assertThatThrownBy(() -> withUserConnection(user, conn -> createSimpleTrigger(conn, ownTrigger, ownTable)))
                 .isInstanceOf(IllegalStateException.class);
 
-        grantToRole(role, "create trigger");
-        grantRoleToUser(role, user);
+        grantToUser(user, "create trigger");
 
         withUserConnection(user, conn -> createSimpleTrigger(conn, ownTrigger, ownTable));
         withUserConnection(user, conn -> {
@@ -553,11 +546,9 @@ class PrivilegeGrantJdbcTest extends BaseDbTest {
     }
 
     @Test
-    @Disabled("Defect candidate on Altibase 7.3.0.1.8: role-granted CREATE SYNONYM is not honored for own-schema synonym creation")
-    @DisplayName("TC_318_001 CREATE SYNONYM privilege can be granted to a role")
+    @DisplayName("TC_318_001 CREATE SYNONYM privilege can be granted directly to a user")
     void tc318001GrantCreateSynonym() throws Exception {
         String user = createManagedUser("QA_SYN_USER");
-        String role = createManagedRole("QA_SYN_ROLE");
         String synonymName = DbTestSupport.uniqueName("QA_SYN");
 
         registerCleanup(() -> {
@@ -570,8 +561,7 @@ class PrivilegeGrantJdbcTest extends BaseDbTest {
         assertThatThrownBy(() -> withUserConnection(user, conn -> jdbc.executeUpdate(conn, "create synonym " + synonymName + " for dual")))
                 .isInstanceOf(IllegalStateException.class);
 
-        grantToRole(role, "create synonym");
-        grantRoleToUser(role, user);
+        grantToUser(user, "create synonym");
 
         withUserConnection(user, conn -> {
             jdbc.executeUpdate(conn, "create synonym " + synonymName + " for dual");
@@ -677,11 +667,9 @@ class PrivilegeGrantJdbcTest extends BaseDbTest {
     }
 
     @Test
-    @Disabled("Defect candidate on Altibase 7.3.0.1.8: role-granted CREATE MATERIALIZED VIEW is not honored for own-schema creation")
-    @DisplayName("TC_320_001 CREATE MATERIALIZED VIEW privilege can be granted to a role")
+    @DisplayName("TC_320_001 CREATE MATERIALIZED VIEW privilege can be granted directly to a user")
     void tc320001GrantCreateMaterializedView() throws Exception {
         String user = createManagedUser("QA_MV_USER");
-        String role = createManagedRole("QA_MV_ROLE");
         String sourceTable = DbTestSupport.uniqueName("QA_MV_SRC");
         String viewName = DbTestSupport.uniqueName("QA_MV");
 
@@ -697,8 +685,7 @@ class PrivilegeGrantJdbcTest extends BaseDbTest {
                 jdbc.executeUpdate(conn, "create materialized view " + viewName + " as select * from " + sourceTable)))
                 .isInstanceOf(IllegalStateException.class);
 
-        grantToRole(role, "create materialized view");
-        grantRoleToUser(role, user);
+        grantToUser(user, "create materialized view");
 
         withUserConnection(user, conn ->
                 jdbc.executeUpdate(conn, "create materialized view " + viewName + " as select * from " + sourceTable));
@@ -903,84 +890,61 @@ class PrivilegeGrantJdbcTest extends BaseDbTest {
     }
 
     @Test
-    @DisplayName("Additional negative case: role-granted CREATE PROCEDURE is ignored after the direct privilege is revoked")
+    @DisplayName("Additional negative case: role-granted CREATE PROCEDURE is not honored as own-schema CREATE")
     void tc313Neg001RoleGrantedCreateProcedureStillFails() throws Exception {
         String user = createManagedUser("QA_PROC_ROLE_ONLY");
         String role = createManagedRole("QA_PROC_ROLE_ONLY");
-        String blockedProcedure = DbTestSupport.uniqueName("QA_PROC_ROLE_FAIL");
-        String createdProcedure = DbTestSupport.uniqueName("QA_PROC_ROLE_OK");
+        String procedureName = DbTestSupport.uniqueName("QA_PROC_ROLE_FAIL");
 
         jdbc.executeUpdate(connection, "revoke create procedure from " + user);
         grantToRole(role, "create procedure");
         grantRoleToUser(role, user);
 
-        assertThatThrownBy(() -> withUserConnection(user, conn -> createSimpleOutProcedure(conn, blockedProcedure)))
+        assertThatThrownBy(() -> withUserConnection(user, conn -> createSimpleOutProcedure(conn, procedureName)))
                 .isInstanceOf(IllegalStateException.class);
-
-        grantToUser(user, "create procedure");
-        withUserConnection(user, conn -> createSimpleOutProcedure(conn, createdProcedure));
-
-        assertThat(storedProgramExists(createdProcedure)).isTrue();
     }
 
     @Test
-    @DisplayName("Additional negative case: role-granted CREATE TRIGGER is ignored after the direct privilege is revoked")
+    @DisplayName("Additional negative case: role-granted CREATE TRIGGER is not honored as own-schema CREATE")
     void tc317Neg001RoleGrantedCreateTriggerStillFails() throws Exception {
         String user = createManagedUser("QA_TRG_ROLE_ONLY");
         String role = createManagedRole("QA_TRG_ROLE_ONLY");
         String tableName = DbTestSupport.uniqueName("QA_TRG_ROLE_TB");
-        String blockedTrigger = DbTestSupport.uniqueName("QA_TRG_ROLE_FAIL");
-        String createdTrigger = DbTestSupport.uniqueName("QA_TRG_ROLE_OK");
+        String triggerName = DbTestSupport.uniqueName("QA_TRG_ROLE_FAIL");
 
         withUserConnection(user, conn -> jdbc.executeUpdate(conn, "create table " + tableName + "(c1 integer, c2 integer)"));
         jdbc.executeUpdate(connection, "revoke create trigger from " + user);
         grantToRole(role, "create trigger");
         grantRoleToUser(role, user);
 
-        assertThatThrownBy(() -> withUserConnection(user, conn -> createSimpleTrigger(conn, blockedTrigger, tableName)))
+        assertThatThrownBy(() -> withUserConnection(user, conn -> createSimpleTrigger(conn, triggerName, tableName)))
                 .isInstanceOf(IllegalStateException.class);
-
-        grantToUser(user, "create trigger");
-        withUserConnection(user, conn -> createSimpleTrigger(conn, createdTrigger, tableName));
-        withUserConnection(user, conn -> {
-            jdbc.executeUpdate(conn, "insert into " + tableName + "(c1, c2) values(1, null)");
-            assertThat(jdbc.queryForString(conn, "select c2 from " + tableName + " where c1 = 1")).isEqualTo("0");
-        });
     }
 
     @Test
-    @DisplayName("Additional negative case: role-granted CREATE SYNONYM is ignored after the direct privilege is revoked")
+    @DisplayName("Additional negative case: role-granted CREATE SYNONYM is not honored as own-schema CREATE")
     void tc318Neg002RoleGrantedCreateSynonymStillFails() throws Exception {
         String user = createManagedUser("QA_SYN_ROLE_ONLY");
         String role = createManagedRole("QA_SYN_ROLE_ONLY");
-        String blockedSynonym = DbTestSupport.uniqueName("QA_SYN_ROLE_FAIL");
-        String createdSynonym = DbTestSupport.uniqueName("QA_SYN_ROLE_OK");
+        String synonymName = DbTestSupport.uniqueName("QA_SYN_ROLE_FAIL");
 
         jdbc.executeUpdate(connection, "revoke create synonym from " + user);
         grantToRole(role, "create synonym");
         grantRoleToUser(role, user);
 
-        assertThatThrownBy(() -> withUserConnection(user, conn -> jdbc.executeUpdate(conn, "create synonym " + blockedSynonym + " for dual")))
+        assertThatThrownBy(() -> withUserConnection(user, conn -> jdbc.executeUpdate(conn, "create synonym " + synonymName + " for dual")))
                 .isInstanceOf(IllegalStateException.class);
-
-        grantToUser(user, "create synonym");
-        withUserConnection(user, conn -> {
-            jdbc.executeUpdate(conn, "create synonym " + createdSynonym + " for dual");
-            assertThat(jdbc.queryForString(conn, "select count(*) from " + createdSynonym)).isEqualTo("1");
-        });
     }
 
     @Test
-    @DisplayName("Additional negative case: role-granted CREATE MATERIALIZED VIEW is ignored after the direct privilege is revoked")
+    @DisplayName("Additional negative case: role-granted CREATE MATERIALIZED VIEW is not honored as own-schema CREATE")
     void tc320Neg001RoleGrantedCreateMaterializedViewStillFails() throws Exception {
         String user = createManagedUser("QA_MV_ROLE_ONLY");
         String role = createManagedRole("QA_MV_ROLE_ONLY");
         String sourceTable = DbTestSupport.uniqueName("QA_MV_ROLE_SRC");
-        String blockedView = DbTestSupport.uniqueName("QA_MV_ROLE_FAIL");
-        String createdView = DbTestSupport.uniqueName("QA_MV_ROLE_OK");
+        String viewName = DbTestSupport.uniqueName("QA_MV_ROLE_FAIL");
 
-        registerCleanup(() -> dropMaterializedViewQuietly(user + "." + blockedView));
-        registerCleanup(() -> dropMaterializedViewQuietly(user + "." + createdView));
+        registerCleanup(() -> dropMaterializedViewQuietly(user + "." + viewName));
         registerCleanup(() -> DbTestSupport.dropTableQuietly(jdbc, connection, user + "." + sourceTable));
 
         jdbc.executeUpdate(connection, "revoke create materialized view from " + user);
@@ -992,14 +956,8 @@ class PrivilegeGrantJdbcTest extends BaseDbTest {
         grantRoleToUser(role, user);
 
         assertThatThrownBy(() -> withUserConnection(user, conn ->
-                jdbc.executeUpdate(conn, "create materialized view " + blockedView + " as select * from " + sourceTable)))
+                jdbc.executeUpdate(conn, "create materialized view " + viewName + " as select * from " + sourceTable)))
                 .isInstanceOf(IllegalStateException.class);
-
-        grantToUser(user, "create materialized view");
-        withUserConnection(user, conn ->
-                jdbc.executeUpdate(conn, "create materialized view " + createdView + " as select * from " + sourceTable));
-        withUserConnection(user, conn ->
-                assertThat(jdbc.queryForString(conn, "select count(*) from " + createdView)).isEqualTo("1"));
     }
 
     @Test

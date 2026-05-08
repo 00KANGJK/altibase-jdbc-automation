@@ -207,6 +207,15 @@ class CommunicationFunctionJdbcTest extends BaseDbTest {
         assertThat(jdbc.queryForString(connection, "select msg_drop_queue(" + queueKey + ") from dual")).isEqualTo("1");
     }
 
+    @Test
+    @DisplayName("Additional negative case: MSG_SND_QUEUE returns 1 when the queue does not exist")
+    void msgSendQueueMissingKeyReturnsOne() {
+        int queueKey = uniqueQueueKey();
+
+        assertThat(jdbc.queryForString(connection,
+                "select msg_snd_queue(" + queueKey + ", varchar'altibase') from dual")).isEqualTo("1");
+    }
+
     private int uniqueQueueKey() {
         return ThreadLocalRandom.current().nextInt(100000, 999999);
     }

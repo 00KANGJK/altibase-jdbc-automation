@@ -1,0 +1,78 @@
+env:
+  name: portfolio-template
+
+db:
+  host: 127.0.0.1
+  port: 20300
+  database: mydb
+  user: sys
+  password: change-me
+  jdbcUrl: jdbc:Altibase://127.0.0.1:20300/mydb
+  driverClass: Altibase.jdbc.driver.AltibaseDriver
+
+client:
+  altibaseHome: /opt/altibase/client
+  isql: /opt/altibase/client/bin/isql
+  iloader: /opt/altibase/client/bin/iloader
+  aexport: /opt/altibase/client/bin/aexport
+  jdbcJar: /opt/altibase/client/lib/Altibase.jar
+
+server:
+  altibaseHome: /opt/altibase/altibase_home
+  isql: /opt/altibase/altibase_home/bin/isql
+  server: /opt/altibase/altibase_home/bin/server
+  iloader: /opt/altibase/altibase_home/bin/iloader
+  aexport: /opt/altibase/altibase_home/bin/aexport
+
+paths:
+  memDbDir: /opt/altibase/altibase_home/dbs
+  diskDbDir: /opt/altibase/altibase_home/dbs
+  logDir: /opt/altibase/altibase_home/logs
+  archiveDir: /opt/altibase/altibase_home/arch_logs
+  auditDir: /opt/altibase/altibase_home/trc
+  workRoot: /tmp/altibase-qa-auto
+  backupDir: /tmp/altibase-qa-auto/backup
+  datafileDir: /tmp/altibase-qa-auto/datafile
+  exportDir: /tmp/altibase-qa-auto/export
+  scriptDir: /tmp/altibase-qa-auto/script
+  logCaptureDir: /tmp/altibase-qa-auto/log
+
+features:
+  directoryFileIo: false
+  databaseLink: false
+  storedPackages: false
+  utlTcp: false
+  utlSmtp: false
+  queue: false
+  spatial: false
+  replication: false
+  backupRecovery: false
+  serverLifecycle: false
+  cliUtilities: false
+
+network:
+  tcpHost: 127.0.0.1
+  tcpPort: 19001
+  smtpHost: 127.0.0.1
+  smtpPort: 19025
+
+databaseLink:
+  targetName: QA_SELF
+  remoteUser: sys
+  remotePassword: change-me
+
+replication:
+  remoteHost: 127.0.0.1
+  remotePort: 0
+
+timeouts:
+  connectSeconds: 10
+  querySeconds: 60
+  commandSeconds: 300
+
+execution:
+  enableDbTests: false
+  enableCliTests: false
+  enableDestructiveTests: false
+  enableRecoveryTests: false
+  enableReplicationTests: false

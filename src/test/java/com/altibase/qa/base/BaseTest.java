@@ -35,6 +35,9 @@ public abstract class BaseTest {
         cleanupTasks.push(cleanup);
     }
 
+    protected void tearDownResources() {
+    }
+
     @AfterEach
     void tearDownBase() {
         while (!cleanupTasks.isEmpty()) {
@@ -43,5 +46,6 @@ public abstract class BaseTest {
             } catch (Exception ignored) {
             }
         }
+        tearDownResources();
     }
 }

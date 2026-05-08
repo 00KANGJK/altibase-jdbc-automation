@@ -8,11 +8,13 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.sql.CallableStatement;
 import java.sql.Date;
+import java.sql.SQLException;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class CallableStatementJdbcTest extends BaseDbTest {
 
@@ -197,6 +199,44 @@ class CallableStatementJdbcTest extends BaseDbTest {
             assertThat(cs.getString(1)).isNull();
             assertThat(cs.wasNull()).isTrue();
         }
+    }
+
+    @Test
+    @DisplayName("Additional negative case: OUT values cannot be read before OUT parameters are registered")
+    void outValuesCannotBeReadBeforeRegistration() throws Exception {
+        String procedureName = DbTestSupport.uniqueName("QA_CALL_UNREG");
+        createProcedure(procedureName, "integer", "7");
+
+        try (CallableStatement cs = connection.prepareCall("{call " + procedureName + "(?)}")) {
+            assertThatThrownBy(() -> {
+                cs.execute();
+                cs.getInt(1);
+            }).isInstanceOf(SQLException.class);
+        }
+    }
+
+    @Test
+    @DisplayName("Additional negative case: CallableStatement rejects invalid parameter indexes")
+    void callableStatementRejectsInvalidParameterIndexes() throws Exception {
+        String procedureName = DbTestSupport.uniqueName("QA_CALL_BAD_IDX");
+        createProcedure(procedureName, "integer", "7");
+
+        try (CallableStatement cs = connection.prepareCall("{call " + procedureName + "(?)}")) {
+            assertThatThrownBy(() -> cs.registerOutParameter(2, Types.INTEGER))
+                    .isInstanceOf(SQLException.class);
+        }
+    }
+
+    @Test
+    @DisplayName("Additional negative case: closed CallableStatement rejects execution")
+    void closedCallableStatementRejectsExecution() throws Exception {
+        String procedureName = DbTestSupport.uniqueName("QA_CALL_CLOSED");
+        createProcedure(procedureName, "integer", "7");
+        CallableStatement cs = connection.prepareCall("{call " + procedureName + "(?)}");
+        cs.close();
+
+        assertThat(cs.isClosed()).isTrue();
+        assertThatThrownBy(cs::execute).isInstanceOf(SQLException.class);
     }
 
     private void createProcedure(String procedureName, String type, String assignment) {

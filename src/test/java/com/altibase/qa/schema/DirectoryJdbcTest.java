@@ -2,6 +2,7 @@ package com.altibase.qa.schema;
 
 import com.altibase.qa.base.BaseDbTest;
 import com.altibase.qa.support.DbTestSupport;
+import com.altibase.qa.support.FeatureProbe;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -65,6 +66,8 @@ class DirectoryJdbcTest extends BaseDbTest {
     @Test
     @DisplayName("TC_286_001 create a stored procedure that writes a line through a directory object")
     void tc286001CreateWriteProcedureUsingDirectory() throws Exception {
+        FeatureProbe.assumeDirectoryFileIoAvailable(config, jdbc, connection);
+
         String userName = DbTestSupport.uniqueName("QA_DIR_PROC_USER");
         String directoryName = DbTestSupport.uniqueName("QA_DIR_WRITE");
         String procedureName = DbTestSupport.uniqueName("WRITE_T1");
@@ -97,6 +100,8 @@ class DirectoryJdbcTest extends BaseDbTest {
     @Test
     @DisplayName("TC_286_002 create a stored procedure that reads a line through a directory object")
     void tc286002CreateReadProcedureUsingDirectory() throws Exception {
+        FeatureProbe.assumeDirectoryFileIoAvailable(config, jdbc, connection);
+
         String userName = DbTestSupport.uniqueName("QA_DIR_READ_USER");
         String directoryName = DbTestSupport.uniqueName("QA_DIR_READ");
         String writeProcedure = DbTestSupport.uniqueName("WRITE_T1");
@@ -210,6 +215,8 @@ class DirectoryJdbcTest extends BaseDbTest {
     @Test
     @DisplayName("Additional negative case: a directory-backed procedure fails after the directory is dropped")
     void directoryBackedProcedureFailsAfterDirectoryDrop() throws Exception {
+        FeatureProbe.assumeDirectoryFileIoAvailable(config, jdbc, connection);
+
         String userName = DbTestSupport.uniqueName("QA_DIR_DROP_USER");
         String directoryName = DbTestSupport.uniqueName("QA_DIR_DROP");
         String procedureName = DbTestSupport.uniqueName("WRITE_DROP_T1");
